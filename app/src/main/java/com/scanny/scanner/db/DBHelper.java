@@ -13,9 +13,21 @@ import com.scanny.scanner.models.DBModel;
 
 import java.util.ArrayList;
 
+/**
+ * Every group (folder) is a row in {@code alldocs}, and its pages live in a table of their own.
+ *
+ * <p>Since version 2 that table has a generated name ({@code "group <id>"}, stored in
+ * {@code alldocs.tbl}) and is looked up from the folder name. Version 1 derived the table name
+ * from the folder name with spaces removed, and SQLite compares table names case-insensitively,
+ * so folders such as "Doc"/"doc" or "My Doc"/"MyDoc" shared one table: deleting, renaming or
+ * moving one of them destroyed the other folder's pages.
+ *
+ * <p>The public methods still take the folder name. Folder names are kept unique
+ * (case-insensitively) so that a name identifies exactly one folder.
+ */
 public class DBHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "DocumentDB";
-    private static final int DATABASE_VERSION = 1;
+    private static final int DATABASE_VERSION = 2;
     private static final String KEY_FIRST_IMAGE = "firstimage";
     private static final String KEY_ID = "id";
     private static final String KEY_IMG_NAME = "imgname";
@@ -24,38 +36,37 @@ public class DBHelper extends SQLiteOpenHelper {
     private static final String KEY_TABLE_DATE = "date";
     private static final String KEY_TABLE_NAME = "name";
     private static final String KEY_TAG = "tag";
+    private static final String KEY_DOC_TABLE = "tbl";
     private static final String TABLE_NAME = "alldocs";
+    private static final String DOC_TABLE_COLUMNS = "(" + KEY_ID + " INTEGER PRIMARY KEY," + KEY_IMG_NAME + " TEXT," + KEY_IMG_NOTE + " TEXT," + KEY_IMG_PATH + " TEXT)";
     private static final String TAG = "DBHelper";
 
-    /**
-     * Group (folder) names are user supplied and every group gets its own SQLite table.
-     * Identifiers cannot be bound as query parameters, so they must be quoted and escaped
-     * here instead of being concatenated into SQL (previously allowed SQL injection, e.g.
-     * a folder called {@code x; DROP TABLE alldocs} or a name containing a quote).
-     */
-    public static String tableName(String groupName) {
-        return groupName == null ? "" : groupName.replace(" ", "");
+    /** A folder's alldocs row id and the table that holds its pages. */
+    private static final class GroupRef {
+        final long id;
+        final String table;
+
+        GroupRef(long id, String table) {
+            this.id = id;
+            this.table = table;
+        }
     }
 
-    private static String quoteIdentifier(String groupName) {
-        return "\"" + tableName(groupName).replace("\"", "\"\"") + "\"";
+    /** Identifiers cannot be bound as query parameters, so they are quoted and escaped. */
+    private static String quote(String table) {
+        return "\"" + table.replace("\"", "\"\"") + "\"";
     }
 
     /**
-     * Returns true when {@code name} can safely be used as a group/folder name: it becomes a
-     * table name and part of exported PDF file names, so reserved table names, path
-     * separators and control characters are rejected.
+     * Returns true when {@code name} can be used as a group/folder name. Names become part of
+     * exported PDF file names, so path separators and control characters are rejected.
      */
     public static boolean isValidGroupName(String name) {
         if (name == null) {
             return false;
         }
-        String table = tableName(name.trim());
-        if (table.isEmpty() || table.length() > 100) {
-            return false;
-        }
-        if (table.equalsIgnoreCase(TABLE_NAME) || table.toLowerCase(java.util.Locale.ROOT).startsWith("sqlite_")
-                || table.toLowerCase(java.util.Locale.ROOT).startsWith("android_metadata")) {
+        String trimmed = name.trim();
+        if (trimmed.isEmpty() || trimmed.length() > 100) {
             return false;
         }
         if (name.contains("..")) {
@@ -72,55 +83,151 @@ public class DBHelper extends SQLiteOpenHelper {
     }
 
     public DBHelper(Context context) {
-        super(context, DATABASE_NAME, (SQLiteDatabase.CursorFactory) null, 1);
+        super(context, DATABASE_NAME, (SQLiteDatabase.CursorFactory) null, DATABASE_VERSION);
     }
 
     @Override
     public void onCreate(SQLiteDatabase sQLiteDatabase) {
-        sQLiteDatabase.execSQL("CREATE TABLE alldocs(id INTEGER PRIMARY KEY,name TEXT,date TEXT,tag TEXT,firstimage TEXT)");
+        sQLiteDatabase.execSQL("CREATE TABLE alldocs(id INTEGER PRIMARY KEY,name TEXT,date TEXT,tag TEXT,firstimage TEXT,tbl TEXT)");
     }
 
     @Override
-    public void onUpgrade(SQLiteDatabase sQLiteDatabase, int i, int i2) {
-        sQLiteDatabase.execSQL("DROP TABLE IF EXISTS alldocs");
-        onCreate(sQLiteDatabase);
+    public void onUpgrade(SQLiteDatabase sQLiteDatabase, int oldVersion, int newVersion) {
+        // Runs inside a transaction opened by SQLiteOpenHelper. Never drop user data here.
+        if (oldVersion < 2) {
+            sQLiteDatabase.execSQL("ALTER TABLE alldocs ADD COLUMN tbl TEXT");
+            Cursor cursor = sQLiteDatabase.rawQuery("SELECT id, name FROM alldocs", null);
+            try {
+                while (cursor.moveToNext()) {
+                    long id = cursor.getLong(0);
+                    String name = cursor.getString(1);
+                    // Keep pointing at the version 1 table. Folders that already shared a table
+                    // keep sharing it: their pages cannot be told apart any more.
+                    String table = name == null ? "" : name.replace(" ", "");
+                    if (table.isEmpty()) {
+                        table = "group " + id;
+                    }
+                    sQLiteDatabase.execSQL("CREATE TABLE IF NOT EXISTS " + quote(table) + DOC_TABLE_COLUMNS);
+                    ContentValues contentValues = new ContentValues();
+                    contentValues.put(KEY_DOC_TABLE, table);
+                    sQLiteDatabase.update(TABLE_NAME, contentValues, "id = ?", new String[]{String.valueOf(id)});
+                }
+            } finally {
+                cursor.close();
+            }
+        }
     }
 
-    public void createDocTable(String str) {
-        SQLiteDatabase writableDatabase = getWritableDatabase();
-        writableDatabase.execSQL("CREATE TABLE IF NOT EXISTS " + quoteIdentifier(str) + "(" + KEY_ID + " INTEGER PRIMARY KEY," + KEY_IMG_NAME + " TEXT," + KEY_IMG_NOTE + " TEXT," + KEY_IMG_PATH + " TEXT)");
+    /** Looks a folder up by name: an exact match first, otherwise a case-insensitive one. */
+    private static GroupRef findGroup(SQLiteDatabase db, String groupName) {
+        if (groupName == null) {
+            return null;
+        }
+        Cursor cursor = db.rawQuery("SELECT id, tbl FROM alldocs WHERE name = ? COLLATE NOCASE ORDER BY name = ? DESC LIMIT 1", new String[]{groupName, groupName});
+        try {
+            if (!cursor.moveToFirst() || cursor.isNull(1)) {
+                Log.w(TAG, "No table for group");
+                return null;
+            }
+            return new GroupRef(cursor.getLong(0), cursor.getString(1));
+        } finally {
+            cursor.close();
+        }
     }
 
-    public void addGroup(DBModel dBModel) {
+    private static boolean isGroupNameTaken(SQLiteDatabase db, String name, String ignoredName) {
+        Cursor cursor = ignoredName == null
+                ? db.rawQuery("SELECT 1 FROM alldocs WHERE name = ? COLLATE NOCASE LIMIT 1", new String[]{name})
+                : db.rawQuery("SELECT 1 FROM alldocs WHERE name = ? COLLATE NOCASE AND name <> ? LIMIT 1", new String[]{name, ignoredName});
+        try {
+            return cursor.moveToFirst();
+        } finally {
+            cursor.close();
+        }
+    }
+
+    /** True when another folder already uses this name (ignoring case). */
+    public boolean isGroupNameTaken(String name) {
+        return isGroupNameTaken(getReadableDatabase(), name, null);
+    }
+
+    /**
+     * Creates a folder and its page table in one transaction. If the name is already taken a
+     * suffix is added ("Scanny_0311_2"), so callers must use the returned name.
+     */
+    public String createGroup(DBModel dBModel) {
         SQLiteDatabase writableDatabase = getWritableDatabase();
-        ContentValues contentValues = new ContentValues();
-        contentValues.put("name", dBModel.getGroup_name());
-        contentValues.put("date", dBModel.getGroup_date());
-        contentValues.put(KEY_TAG, dBModel.getGroup_tag());
-        contentValues.put(KEY_FIRST_IMAGE, dBModel.getGroup_first_img());
-        writableDatabase.insert(TABLE_NAME, (String) null, contentValues);
-        writableDatabase.close();
+        writableDatabase.beginTransaction();
+        try {
+            String baseName = dBModel.getGroup_name();
+            String name = baseName;
+            for (int i = 2; isGroupNameTaken(writableDatabase, name, null); i++) {
+                name = baseName + "_" + i;
+            }
+            ContentValues contentValues = new ContentValues();
+            contentValues.put("name", name);
+            contentValues.put("date", dBModel.getGroup_date());
+            contentValues.put(KEY_TAG, dBModel.getGroup_tag());
+            contentValues.put(KEY_FIRST_IMAGE, dBModel.getGroup_first_img());
+            long id = writableDatabase.insertOrThrow(TABLE_NAME, null, contentValues);
+            // Version 1 table names never contain a space, so this cannot collide with them.
+            String table = "group " + id;
+            // Row ids can be reused after a delete; never inherit pages from an old table.
+            writableDatabase.execSQL("DROP TABLE IF EXISTS " + quote(table));
+            writableDatabase.execSQL("CREATE TABLE " + quote(table) + DOC_TABLE_COLUMNS);
+            ContentValues tableValues = new ContentValues();
+            tableValues.put(KEY_DOC_TABLE, table);
+            writableDatabase.update(TABLE_NAME, tableValues, "id = ?", new String[]{String.valueOf(id)});
+            writableDatabase.setTransactionSuccessful();
+            dBModel.setGroup_name(name);
+            return name;
+        } finally {
+            writableDatabase.endTransaction();
+            writableDatabase.close();
+        }
     }
 
     public void addGroupDoc(String name, String path, String img_name, String note) {
         SQLiteDatabase writableDatabase = getWritableDatabase();
-        ContentValues contentValues = new ContentValues();
-        contentValues.put(KEY_IMG_PATH, path);
-        contentValues.put(KEY_IMG_NAME, img_name);
-        contentValues.put(KEY_IMG_NOTE, note);
-        writableDatabase.insert(quoteIdentifier(name), null, contentValues);
+        GroupRef group = findGroup(writableDatabase, name);
+        if (group != null) {
+            ContentValues contentValues = new ContentValues();
+            contentValues.put(KEY_IMG_PATH, path);
+            contentValues.put(KEY_IMG_NAME, img_name);
+            contentValues.put(KEY_IMG_NOTE, note);
+            writableDatabase.insert(quote(group.table), null, contentValues);
+        }
         writableDatabase.close();
     }
 
-    public long moveGroupDoc(String name, String path, String img_name, String note) {
+    /**
+     * Moves every page (with its note) of folder {@code from} into folder {@code to} and deletes
+     * {@code from}, all in one transaction. Returns false and changes nothing on failure.
+     */
+    public boolean moveGroup(String from, String to) {
         SQLiteDatabase writableDatabase = getWritableDatabase();
-        ContentValues contentValues = new ContentValues();
-        contentValues.put(KEY_IMG_PATH, path);
-        contentValues.put(KEY_IMG_NAME, img_name);
-        contentValues.put(KEY_IMG_NOTE, note);
-        long value = writableDatabase.insert(quoteIdentifier(name), null, contentValues);
-        writableDatabase.close();
-        return value;
+        writableDatabase.beginTransaction();
+        try {
+            GroupRef source = findGroup(writableDatabase, from);
+            GroupRef target = findGroup(writableDatabase, to);
+            if (source == null || target == null || source.table.equalsIgnoreCase(target.table)) {
+                return false;
+            }
+            writableDatabase.execSQL("INSERT INTO " + quote(target.table) + "(" + KEY_IMG_NAME + "," + KEY_IMG_NOTE + "," + KEY_IMG_PATH + ") SELECT "
+                    + KEY_IMG_NAME + "," + KEY_IMG_NOTE + "," + KEY_IMG_PATH + " FROM " + quote(source.table));
+            // An empty target has no cover image; it would keep showing as an empty folder.
+            writableDatabase.execSQL("UPDATE alldocs SET firstimage = (SELECT firstimage FROM alldocs WHERE id = ?) WHERE id = ? AND (firstimage IS NULL OR firstimage = '')",
+                    new Object[]{source.id, target.id});
+            deleteGroup(writableDatabase, source);
+            writableDatabase.setTransactionSuccessful();
+            return true;
+        } catch (RuntimeException e) {
+            Log.e(TAG, "moveGroup failed", e);
+            return false;
+        } finally {
+            writableDatabase.endTransaction();
+            writableDatabase.close();
+        }
     }
 
     public ArrayList<DBModel> getAllGroups() {
@@ -152,7 +259,7 @@ public class DBHelper extends SQLiteOpenHelper {
                 dBModel.setGroup_date(rawQuery.getString(2));
                 dBModel.setGroup_tag(rawQuery.getString(3));
                 dBModel.setGroup_first_img(rawQuery.getString(4));
-                if (dBModel.getGroup_first_img().isEmpty()) arrayList.add(dBModel);
+                if (dBModel.getGroup_first_img() == null || dBModel.getGroup_first_img().isEmpty()) arrayList.add(dBModel);
             } while (rawQuery.moveToNext());
         }
         rawQuery.close();
@@ -179,9 +286,12 @@ public class DBHelper extends SQLiteOpenHelper {
 
     public ArrayList<DBModel> getGroupDocs(String str) {
         ArrayList<DBModel> arrayList = new ArrayList<>();
-        String str2 = "SELECT  * FROM " + quoteIdentifier(str);
         SQLiteDatabase readableDatabase = getReadableDatabase();
-        Cursor rawQuery = readableDatabase.rawQuery(str2, (String[]) null);
+        GroupRef group = findGroup(readableDatabase, str);
+        if (group == null) {
+            return arrayList;
+        }
+        Cursor rawQuery = readableDatabase.rawQuery("SELECT  * FROM " + quote(group.table), (String[]) null);
         if (rawQuery.moveToFirst()) {
             do {
                 DBModel dBModel = new DBModel();
@@ -198,29 +308,20 @@ public class DBHelper extends SQLiteOpenHelper {
 
     public ArrayList<DBModel> getShareGroupDocs(String groupName) {
         ArrayList<DBModel> arrayList = new ArrayList<>();
-        String str2 = "SELECT  * FROM " + quoteIdentifier(groupName);
-        SQLiteDatabase readableDatabase = getReadableDatabase();
-        Cursor rawQuery = readableDatabase.rawQuery(str2, (String[]) null);
-        if (rawQuery.moveToFirst()) {
-            do {
-                DBModel dBModel = new DBModel();
-                dBModel.setId(Integer.parseInt(rawQuery.getString(0)));
-                dBModel.setGroup_doc_name(rawQuery.getString(1));
-                dBModel.setGroup_doc_note(rawQuery.getString(2));
-                dBModel.setGroup_doc_img(rawQuery.getString(3));
-                if (dBModel.getGroup_doc_name() != null) arrayList.add(dBModel);
-            } while (rawQuery.moveToNext());
+        for (DBModel dBModel : getGroupDocs(groupName)) {
+            if (dBModel.getGroup_doc_name() != null) arrayList.add(dBModel);
         }
-        rawQuery.close();
         return arrayList;
     }
 
 
     public String getSingleNote(String str, String str2) {
-        Cursor rawQuery = getReadableDatabase().rawQuery("SELECT  * FROM " + quoteIdentifier(str) + " WHERE " + KEY_IMG_NAME + " = ?", new String[]{str2});
-        if (rawQuery == null) {
+        SQLiteDatabase readableDatabase = getReadableDatabase();
+        GroupRef group = findGroup(readableDatabase, str);
+        if (group == null) {
             return "";
         }
+        Cursor rawQuery = readableDatabase.rawQuery("SELECT  * FROM " + quote(group.table) + " WHERE " + KEY_IMG_NAME + " = ?", new String[]{str2});
         try {
             if (!rawQuery.moveToFirst()) {
                 return "";
@@ -231,68 +332,103 @@ public class DBHelper extends SQLiteOpenHelper {
         }
     }
 
+    /** Removes the folder row, and its page table unless another (version 1) folder shares it. */
+    private static void deleteGroup(SQLiteDatabase db, GroupRef group) {
+        db.delete(TABLE_NAME, "id = ?", new String[]{String.valueOf(group.id)});
+        Cursor cursor = db.rawQuery("SELECT 1 FROM alldocs WHERE tbl = ? COLLATE NOCASE LIMIT 1", new String[]{group.table});
+        boolean stillUsed;
+        try {
+            stillUsed = cursor.moveToFirst();
+        } finally {
+            cursor.close();
+        }
+        if (!stillUsed) {
+            db.execSQL("DROP TABLE IF EXISTS " + quote(group.table));
+        }
+    }
+
     public void deleteGroup(String str) {
         SQLiteDatabase writableDatabase = getWritableDatabase();
-        writableDatabase.delete(TABLE_NAME, "name = ?", new String[]{String.valueOf(str)});
-        writableDatabase.execSQL("DROP TABLE IF EXISTS " + quoteIdentifier(str));
-        writableDatabase.close();
+        writableDatabase.beginTransaction();
+        try {
+            GroupRef group = findGroup(writableDatabase, str);
+            if (group != null) {
+                deleteGroup(writableDatabase, group);
+            }
+            writableDatabase.setTransactionSuccessful();
+        } finally {
+            writableDatabase.endTransaction();
+            writableDatabase.close();
+        }
     }
 
     public void deleteSingleDoc(String str, String str2) {
         SQLiteDatabase writableDatabase = getWritableDatabase();
-        writableDatabase.delete(quoteIdentifier(str), "imgname = ?", new String[]{String.valueOf(str2)});
+        GroupRef group = findGroup(writableDatabase, str);
+        if (group != null) {
+            writableDatabase.delete(quote(group.table), "imgname = ?", new String[]{String.valueOf(str2)});
+        }
         writableDatabase.close();
     }
 
-    private boolean isGroupNameExist(Activity activity, String str) {
-        Cursor rawQuery = getReadableDatabase().rawQuery("SELECT * FROM alldocs WHERE name = ?", new String[]{str});
-        int count = rawQuery.getCount();
-        if (count > 0) {
-            Toast.makeText(activity, "Document Name Already Exist", Toast.LENGTH_SHORT).show();
-        }
-        rawQuery.close();
-        if (count >= 1) {
-            return true;
-        }
-        return false;
-    }
-
-    public void updateGroupName(Activity activity, String str, String str2) {
+    /**
+     * Renames a folder. Returns false (after showing a toast) when the new name is invalid or
+     * already used by another folder; callers must then keep using the old name.
+     */
+    public boolean updateGroupName(Activity activity, String str, String str2) {
         if (!isValidGroupName(str2)) {
             Toast.makeText(activity, "Invalid document name", Toast.LENGTH_SHORT).show();
-            return;
+            return false;
         }
-        if (!isGroupNameExist(activity, str2)) {
-            SQLiteDatabase writableDatabase = getWritableDatabase();
+        SQLiteDatabase writableDatabase = getWritableDatabase();
+        try {
+            if (isGroupNameTaken(writableDatabase, str2, str)) {
+                Toast.makeText(activity, "Document Name Already Exist", Toast.LENGTH_SHORT).show();
+                return false;
+            }
+            GroupRef group = findGroup(writableDatabase, str);
+            if (group == null) {
+                return false;
+            }
+            // The page table is keyed by id, so only the display name changes.
             ContentValues contentValues = new ContentValues();
             contentValues.put("name", str2);
-            writableDatabase.update(TABLE_NAME, contentValues, "name = ?", new String[]{String.valueOf(str)});
-            writableDatabase.execSQL("ALTER TABLE " + quoteIdentifier(str) + " RENAME TO " + quoteIdentifier(str2));
+            return writableDatabase.update(TABLE_NAME, contentValues, "id = ?", new String[]{String.valueOf(group.id)}) > 0;
+        } finally {
             writableDatabase.close();
         }
     }
 
     public void updateGroupFirstImg(String str, String str2) {
         SQLiteDatabase writableDatabase = getWritableDatabase();
-        ContentValues contentValues = new ContentValues();
-        contentValues.put(KEY_FIRST_IMAGE, str2);
-        writableDatabase.update(TABLE_NAME, contentValues, "name = ?", new String[]{String.valueOf(str)});
+        GroupRef group = findGroup(writableDatabase, str);
+        if (group != null) {
+            ContentValues contentValues = new ContentValues();
+            contentValues.put(KEY_FIRST_IMAGE, str2);
+            writableDatabase.update(TABLE_NAME, contentValues, "id = ?", new String[]{String.valueOf(group.id)});
+        }
         writableDatabase.close();
     }
 
     public void updateGroupListDoc(String str, String str2, String str3) {
         SQLiteDatabase writableDatabase = getWritableDatabase();
-        ContentValues contentValues = new ContentValues();
-        contentValues.put(KEY_IMG_PATH, str3);
-        writableDatabase.update(quoteIdentifier(str), contentValues, "imgname = ?", new String[]{String.valueOf(str2)});
+        GroupRef group = findGroup(writableDatabase, str);
+        if (group != null) {
+            ContentValues contentValues = new ContentValues();
+            contentValues.put(KEY_IMG_PATH, str3);
+            writableDatabase.update(quote(group.table), contentValues, "imgname = ?", new String[]{String.valueOf(str2)});
+        }
         writableDatabase.close();
     }
 
     public void updateGroupListDocNote(String str, String str2, String str3) {
         SQLiteDatabase writableDatabase = getWritableDatabase();
-        ContentValues contentValues = new ContentValues();
-        contentValues.put(KEY_IMG_NOTE, str3);
-        writableDatabase.update(quoteIdentifier(str), contentValues, "imgname = ?", new String[]{String.valueOf(str2)});
+        GroupRef group = findGroup(writableDatabase, str);
+        if (group != null) {
+            ContentValues contentValues = new ContentValues();
+            contentValues.put(KEY_IMG_NOTE, str3);
+            writableDatabase.update(quote(group.table), contentValues, "imgname = ?", new String[]{String.valueOf(str2)});
+        }
         writableDatabase.close();
     }
 }

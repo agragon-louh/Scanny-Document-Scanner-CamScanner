@@ -388,10 +388,13 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
                     Toast.makeText(SavedEditDocumentActivity.this, "Please Enter Valid Document Name!", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                dataBaseHelper.updateGroupName(SavedEditDocumentActivity.this, str, editText.getText().toString().trim());
+                String newName = editText.getText().toString().trim();
+                if (!dataBaseHelper.updateGroupName(SavedEditDocumentActivity.this, str, newName)) {
+                    return;
+                }
                 dialog.dismiss();
-                edit_doc_grp_name = editText.getText().toString();
-                GroupDocumentActivity.current_group = editText.getText().toString();
+                edit_doc_grp_name = newName;
+                GroupDocumentActivity.current_group = newName;
             }
         });
         ((TextView) dialog.findViewById(R.id.tv_cancel)).setOnClickListener(new View.OnClickListener() {
@@ -551,6 +554,7 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
     }
 
     public class openPDF extends AsyncTask<String, Void, String> {
+        File pdfFile;
         ArrayList<Bitmap> current_bitmap;
         String group_name;
         ProgressDialog progressDialog;
@@ -573,14 +577,18 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
 
         @Override
         public String doInBackground(String... strArr) {
-            createPDFfromBitmap(group_name, current_bitmap, "temp");
+            pdfFile = createPDFfromBitmap(group_name, current_bitmap, "temp");
             return null;
         }
 
         @Override
         public void onPostExecute(String str) {
             super.onPostExecute(str);
-            pdfUri = BaseActivity.getURIFromFile(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name) + "/" + group_name + ".pdf", SavedEditDocumentActivity.this);
+            if (pdfFailed(pdfFile)) {
+                progressDialog.dismiss();
+                return;
+            }
+            pdfUri = BaseActivity.getURIFromFile(pdfFile.getPath(), SavedEditDocumentActivity.this);
             progressDialog.dismiss();
             selected_group_name = group_name;
             Constant.IdentifyActivity = "PDFViewerActivity";
@@ -589,6 +597,7 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
     }
 
     private class shareAsPDF extends AsyncTask<String, Void, String> {
+        File pdfFile;
         ArrayList<Bitmap> bitmap;
         String inputType;
         String password;
@@ -615,18 +624,22 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
         public String doInBackground(String... strArr) {
             if (inputType.equals(PdfObject.TEXT_PDFDOCENCODING)) {
 
-                createPDFfromBitmap(edit_doc_grp_name, bitmap, "temp");
+                pdfFile = createPDFfromBitmap(edit_doc_grp_name, bitmap, "temp");
                 return null;
             }
 
-            createProtectedPDFfromBitmap(edit_doc_grp_name, bitmap, password, "temp");
+            pdfFile = createProtectedPDFfromBitmap(edit_doc_grp_name, bitmap, password, "temp");
             return null;
         }
 
         @Override
         public void onPostExecute(String str) {
             super.onPostExecute(str);
-            Uri uRIFromFile = BaseActivity.getURIFromFile(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name) + "/" + edit_doc_grp_name + ".pdf", SavedEditDocumentActivity.this);
+            if (pdfFailed(pdfFile)) {
+                progressDialog.dismiss();
+                return;
+            }
+            Uri uRIFromFile = BaseActivity.getURIFromFile(pdfFile.getPath(), SavedEditDocumentActivity.this);
             Intent intent = new Intent();
             intent.setAction("android.intent.action.SEND");
             intent.setType("application/pdf");

@@ -410,29 +410,17 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                     return;
                 }
                 if (!finalFolderName.isEmpty()) {
+                    if (dbHelper.isGroupNameTaken(finalFolderName)) {
+                        Toast.makeText(mainActivity, "Document Name Already Exist", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
                     String group_date = Constant.getDateTime("yyyy-MM-dd  hh:mm a");
-                    if (groupName.isEmpty()) {        // for create new folder
-                        dbHelper.createDocTable(finalFolderName);
-                        dbHelper.addGroup(new DBModel(finalFolderName, group_date, "", Constant.current_tag));
-                    } else {
-                        dbHelper.createDocTable(finalFolderName);
-                        dbHelper.addGroup(new DBModel(finalFolderName, group_date, "", Constant.current_tag));
-                        // for move new folder
-                        boolean isSuccess = false;
-                        ArrayList<DBModel> allFileList = dbHelper.getGroupDocs(groupName);
-                        for (int i = 0; i < allFileList.size(); i++) {
-                            DBModel newDbModel = allFileList.get(i);
-                            long isMove = dbHelper.moveGroupDoc(finalFolderName, newDbModel.getGroup_doc_img(), newDbModel.getGroup_doc_name(), "Insert text here...");
-                            if (isMove <= 0) {
-                                isSuccess = false;
-                                break;
-                            } else {
-                                isSuccess = true;
-                            }
-                        }
-                        if (isSuccess) {
+                    String createdName = dbHelper.createGroup(new DBModel(finalFolderName, group_date, "", Constant.current_tag));
+                    if (!groupName.isEmpty()) {        // for move new folder
+                        if (dbHelper.moveGroup(groupName, createdName)) {
                             Toast.makeText(mainActivity, "Move successfully", Toast.LENGTH_SHORT).show();
-                            dbHelper.deleteGroup(groupName);
+                        } else {
+                            Toast.makeText(mainActivity, "Move failed", Toast.LENGTH_SHORT).show();
                         }
                     }
                     new setAllGroupAdapter().execute(new String[0]);
@@ -779,22 +767,11 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
             @Override
             public void onClick(View view) {
                 if (!selectedFolderName.isEmpty()) {
-                    boolean success = false;
-                    ArrayList<DBModel> allFileList = dbHelper.getGroupDocs(selectedDBModel.getGroup_name().replace(" ", ""));
-                    for (int i = 0; i < allFileList.size(); i++) {
-                        DBModel newDbModel = allFileList.get(i);
-                        long isMove = dbHelper.moveGroupDoc(selectedFolderName, newDbModel.getGroup_doc_img(), newDbModel.getGroup_doc_name(), "Insert text here...");
-                        if (isMove <= 0) {
-                            success = false;
-                            break;
-                        } else {
-                            success = true;
-                        }
-                    }
-                    if (success) {
+                    if (dbHelper.moveGroup(selectedDBModel.getGroup_name(), selectedFolderName)) {
                         Toast.makeText(mainActivity, "Move successfully", Toast.LENGTH_SHORT).show();
-                        dbHelper.deleteGroup(selectedDBModel.getGroup_name().replace(" ", ""));
                         new setAllGroupAdapter().execute();
+                    } else {
+                        Toast.makeText(mainActivity, "Move failed", Toast.LENGTH_SHORT).show();
                     }
                     dialog.dismiss();
                 } else {
@@ -812,7 +789,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         ll_new_folder_add.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                openNewFolderDialog(selectedDBModel.getGroup_name().replace(" ", ""));
+                openNewFolderDialog(selectedDBModel.getGroup_name());
                 dialog.dismiss();
             }
         });
@@ -882,7 +859,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         ((RelativeLayout) dialog.findViewById(R.id.rl_share_img)).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                ArrayList<DBModel> groupDocs = dbHelper.getGroupDocs(name.replace(" ", ""));
+                ArrayList<DBModel> groupDocs = dbHelper.getGroupDocs(name);
                 ArrayList arrayList = new ArrayList();
                 Iterator<DBModel> it = groupDocs.iterator();
                 while (it.hasNext()) {
@@ -1027,7 +1004,9 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                     Toast.makeText(MainActivity.this, "Please Enter Valid Document Name!", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                dbHelper.updateGroupName(MainActivity.this, name, editText.getText().toString().trim());
+                if (!dbHelper.updateGroupName(MainActivity.this, name, editText.getText().toString().trim())) {
+                    return;
+                }
                 dialog.dismiss();
                 new setAllGroupAdapter().execute(new String[0]);
             }
@@ -1151,7 +1130,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
             while (it.hasNext()) {
                 String group_name = ((DBModel) it.next()).getGroup_name();
                 new ArrayList().clear();
-                ArrayList<DBModel> groupDocs = dbHelper.getShareGroupDocs(group_name.replace(" ", ""));
+                ArrayList<DBModel> groupDocs = dbHelper.getShareGroupDocs(group_name);
                 ArrayList arrayList = new ArrayList();
                 Iterator<DBModel> it2 = groupDocs.iterator();
                 while (it2.hasNext()) {
@@ -1165,8 +1144,10 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                     }
                 }
                 if (arrayList.size() > 0) {
-                    createPDFfromBitmap(group_name, arrayList, "temp");
-                    allPDFList.add(BaseActivity.getURIFromFile(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name) + "/" + group_name + ".pdf", MainActivity.this));
+                    File pdf = createPDFfromBitmap(group_name, arrayList, "temp");
+                    if (pdf != null) {
+                        allPDFList.add(BaseActivity.getURIFromFile(pdf.getPath(), MainActivity.this));
+                    }
                 }
             }
             return null;
@@ -1175,6 +1156,11 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         @Override
         public void onPostExecute(String str) {
             super.onPostExecute(str);
+            if (allPDFList.isEmpty()) {
+                progressDialog.dismiss();
+                pdfFailed(null);
+                return;
+            }
             Intent intent = new Intent();
             intent.setAction("android.intent.action.SEND_MULTIPLE");
             intent.setType("application/pdf");
@@ -1294,6 +1280,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
     }
 
     private class saveGroupAsPDF extends AsyncTask<String, Void, String> {
+        File pdfFile;
         String group_name;
         String inputType;
         String password;
@@ -1321,7 +1308,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         @Override
         public String doInBackground(String... strArr) {
             new ArrayList().clear();
-            ArrayList<DBModel> groupDocs = dbHelper.getGroupDocs(group_name.replace(" ", ""));
+            ArrayList<DBModel> groupDocs = dbHelper.getGroupDocs(group_name);
             ArrayList arrayList = new ArrayList();
             Iterator<DBModel> it = groupDocs.iterator();
             while (it.hasNext()) {
@@ -1335,9 +1322,9 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                 }
             }
             if (inputType.equals(PdfObject.TEXT_PDFDOCENCODING)) {
-                createPDFfromBitmap(pdfName, arrayList, "save");
+                pdfFile = createPDFfromBitmap(pdfName, arrayList, "save");
             } else {
-                createProtectedPDFfromBitmap(pdfName, arrayList, password, "save");
+                pdfFile = createProtectedPDFfromBitmap(pdfName, arrayList, password, "save");
             }
             return null;
         }
@@ -1346,11 +1333,14 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         public void onPostExecute(String str) {
             super.onPostExecute(str);
             progressDialog.dismiss();
-            Toast.makeText(MainActivity.this, "Save Successfully", Toast.LENGTH_SHORT).show();
+            if (!pdfFailed(pdfFile)) {
+                Toast.makeText(MainActivity.this, "Saved as " + pdfFile.getName(), Toast.LENGTH_SHORT).show();
+            }
         }
     }
 
     private class shareGroupAsPDF extends AsyncTask<String, Void, String> {
+        private File pdfFile;
         private String group_name;
         private String inputType;
         private String mailId;
@@ -1380,7 +1370,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         @Override
         public String doInBackground(String... strArr) {
             new ArrayList().clear();
-            ArrayList<DBModel> groupDocs = dbHelper.getGroupDocs(group_name.replace(" ", ""));
+            ArrayList<DBModel> groupDocs = dbHelper.getGroupDocs(group_name);
             ArrayList arrayList = new ArrayList();
             Iterator<DBModel> it = groupDocs.iterator();
             while (it.hasNext()) {
@@ -1394,9 +1384,9 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                 }
             }
             if (inputType.equals(PdfObject.TEXT_PDFDOCENCODING)) {
-                createPDFfromBitmap(group_name, arrayList, "temp");
+                pdfFile = createPDFfromBitmap(group_name, arrayList, "temp");
             } else {
-                createProtectedPDFfromBitmap(group_name, arrayList, password, "temp");
+                pdfFile = createProtectedPDFfromBitmap(group_name, arrayList, password, "temp");
             }
             return null;
         }
@@ -1404,7 +1394,11 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         @Override
         public void onPostExecute(String str) {
             super.onPostExecute(str);
-            Uri uRIFromFile = BaseActivity.getURIFromFile(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name) + "/" + group_name + ".pdf", MainActivity.this);
+            if (pdfFailed(pdfFile)) {
+                progressDialog.dismiss();
+                return;
+            }
+            Uri uRIFromFile = BaseActivity.getURIFromFile(pdfFile.getPath(), MainActivity.this);
             if (shareType.equals("gmail")) {
                 Intent intent = new Intent();
                 intent.setAction("android.intent.action.SEND");
@@ -1458,7 +1452,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         @Override
         public String doInBackground(String... strArr) {
             try {
-                ArrayList<DBModel> groupDocs = dbHelper.getGroupDocs(group_name.replace(" ", ""));
+                ArrayList<DBModel> groupDocs = dbHelper.getGroupDocs(group_name);
                 ArrayList arrayList = new ArrayList();
                 Iterator<DBModel> it = groupDocs.iterator();
                 while (it.hasNext()) {

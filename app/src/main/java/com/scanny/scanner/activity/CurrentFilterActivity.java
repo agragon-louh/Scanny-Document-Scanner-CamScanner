@@ -34,6 +34,8 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
     public PhotoView iv_preview_filter;
     public Bitmap original;
     public String selected_group_name;
+    // True when the saved page started a new folder, so Delete on the next screen removes the folder.
+    public boolean created_new_group;
     public Bitmap tempBitmap;
     protected ImageView iv_back;
     protected ImageView iv_done;
@@ -48,6 +50,7 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
                 Intent intent2 = new Intent(CurrentFilterActivity.this, SavedDocumentActivity.class);
                 intent2.putExtra("scan_doc_group_name", selected_group_name);
                 intent2.putExtra("current_doc_name", current_docs_name);
+                intent2.putExtra("is_new_group", created_new_group);
                 startActivity(intent2);
                 Constant.IdentifyActivity = "";
                 finish();
@@ -294,6 +297,7 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
 
     private class insertGroup extends AsyncTask<Bitmap, Void, Bitmap> {
         String current_doc_name;
+        boolean created_new_group;
         String group_date;
         String group_name;
         ProgressDialog progressDialog;
@@ -328,12 +332,12 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
             } catch (IOException e) {
                 e.printStackTrace();
             }
+            created_new_group = Constant.inputType.equals("Group");
             if (Constant.inputType.equals("Group")) {
                 group_name = "Scanny" + Constant.getDateTime("_ddMMHHmmss");
                 group_date = Constant.getDateTime("yyyy-MM-dd  hh:mm a");
                 current_doc_name = "Doc_" + System.currentTimeMillis();
-                dataBaseHelper.createDocTable(group_name);
-                dataBaseHelper.addGroup(new DBModel(group_name, group_date, file.getPath(), Constant.current_tag));
+                group_name = dataBaseHelper.createGroup(new DBModel(group_name, group_date, file.getPath(), Constant.current_tag));
                 dataBaseHelper.addGroupDoc(group_name, file.getPath(), current_doc_name, "Insert text here...");
                 return null;
             }
@@ -349,6 +353,7 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
             progressDialog.dismiss();
             selected_group_name = group_name;
             current_docs_name = this.current_doc_name;
+            CurrentFilterActivity.this.created_new_group = this.created_new_group;
             Constant.IdentifyActivity = "SavedDocumentActivity";
             AdsUtils.showGoogleInterstitialAd(CurrentFilterActivity.this, true);
         }

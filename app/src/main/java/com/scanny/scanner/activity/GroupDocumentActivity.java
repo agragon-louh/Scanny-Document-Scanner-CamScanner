@@ -262,7 +262,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                 updateGroupName(current_group);
                 return true;
             case R.id.save_to_gallery:
-                ArrayList<DBModel> groupDocs = dataBaseHelper.getGroupDocs(current_group.replace(" ", ""));
+                ArrayList<DBModel> groupDocs = dataBaseHelper.getGroupDocs(current_group);
                 if (groupDocs.size() > 0) {
                     ArrayList arrayList = new ArrayList();
                     Iterator<DBModel> it = groupDocs.iterator();
@@ -275,7 +275,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                 }
                 return true;
             case R.id.send_to_mail:
-                ArrayList<DBModel> mailGroupDocs = dataBaseHelper.getGroupDocs(GroupDocumentActivity.current_group.replace(" ", ""));
+                ArrayList<DBModel> mailGroupDocs = dataBaseHelper.getGroupDocs(GroupDocumentActivity.current_group);
                 if (mailGroupDocs.size() > 0) {
                     sendTomail("Multiple", "gmail");
                 } else {
@@ -283,7 +283,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                 }
                 return true;
             case R.id.share:
-                ArrayList<DBModel> shareGroupDocs = dataBaseHelper.getGroupDocs(GroupDocumentActivity.current_group.replace(" ", ""));
+                ArrayList<DBModel> shareGroupDocs = dataBaseHelper.getGroupDocs(GroupDocumentActivity.current_group);
                 if (shareGroupDocs.size() > 0) {
                     shareGroupDocList("Multiple");
                 } else {
@@ -355,7 +355,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
             @Override
             public void onClick(View view) {
                 if (str.equals("Multiple")) {
-                    ArrayList<DBModel> groupDocs = dataBaseHelper.getGroupDocs(GroupDocumentActivity.current_group.replace(" ", ""));
+                    ArrayList<DBModel> groupDocs = dataBaseHelper.getGroupDocs(GroupDocumentActivity.current_group);
                     if (groupDocs.size() > 0) {
                         ArrayList arrayList = new ArrayList();
                         Iterator<DBModel> it = groupDocs.iterator();
@@ -514,9 +514,12 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                     Toast.makeText(GroupDocumentActivity.this, "Please Enter Valid Document Name!", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                dataBaseHelper.updateGroupName(GroupDocumentActivity.this, str, editText.getText().toString().trim());
+                String newName = editText.getText().toString().trim();
+                if (!dataBaseHelper.updateGroupName(GroupDocumentActivity.this, str, newName)) {
+                    return;
+                }
                 dialog.dismiss();
-                GroupDocumentActivity.current_group = editText.getText().toString();
+                GroupDocumentActivity.current_group = newName;
                 tv_title.setText(GroupDocumentActivity.current_group);
             }
         });
@@ -773,6 +776,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
     }
 
     public class createAndOpenPDF extends AsyncTask<String, Void, String> {
+        File pdfFile;
         private String group_name;
         private ProgressDialog progressDialog;
         private boolean isDocExists = false;
@@ -795,7 +799,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
         @Override
         public String doInBackground(String... strArr) {
             new ArrayList().clear();
-            ArrayList<DBModel> groupDocs = dataBaseHelper.getGroupDocs(group_name.replace(" ", ""));
+            ArrayList<DBModel> groupDocs = dataBaseHelper.getGroupDocs(group_name);
             ArrayList arrayList = new ArrayList();
             Iterator<DBModel> it = groupDocs.iterator();
             while (it.hasNext()) {
@@ -810,7 +814,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
             }
             if (arrayList.size() > 0) {
                 isDocExists = true;
-                createPDFfromBitmap(group_name, arrayList, "temp");
+                pdfFile = createPDFfromBitmap(group_name, arrayList, "temp");
             } else {
                 runOnUiThread(new Runnable() {
                     @Override
@@ -826,7 +830,11 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
         public void onPostExecute(String str) {
             super.onPostExecute(str);
             if (isDocExists) {
-                pdfUri = BaseActivity.getURIFromFile(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name) + "/" + group_name + ".pdf", GroupDocumentActivity.this);
+                if (pdfFailed(pdfFile)) {
+                    progressDialog.dismiss();
+                    return;
+                }
+                pdfUri = BaseActivity.getURIFromFile(pdfFile.getPath(), GroupDocumentActivity.this);
                 selected_group_name = group_name;
                 Constant.IdentifyActivity = "PDFViewerActivity2";
                 AdsUtils.showGoogleInterstitialAd(GroupDocumentActivity.this, true);
@@ -855,7 +863,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
         @Override
         public String doInBackground(String... strArr) {
             GroupDocumentActivity.currentGroupList.clear();
-            GroupDocumentActivity.currentGroupList = dataBaseHelper.getGroupDocs(GroupDocumentActivity.current_group.replace(" ", ""));
+            GroupDocumentActivity.currentGroupList = dataBaseHelper.getGroupDocs(GroupDocumentActivity.current_group);
             return null;
         }
 
@@ -878,6 +886,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
     }
 
     private class shareAsPDF extends AsyncTask<String, Void, String> {
+        File pdfFile;
         String call;
         String inputType;
         String mailId;
@@ -908,7 +917,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
         public String doInBackground(String... strArr) {
             if (call.equals("Multiple")) {
                 new ArrayList().clear();
-                ArrayList<DBModel> groupDocs = dataBaseHelper.getGroupDocs(GroupDocumentActivity.current_group.replace(" ", ""));
+                ArrayList<DBModel> groupDocs = dataBaseHelper.getGroupDocs(GroupDocumentActivity.current_group);
                 ArrayList arrayList = new ArrayList();
                 Iterator<DBModel> it = groupDocs.iterator();
                 while (it.hasNext()) {
@@ -922,14 +931,14 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                     }
                 }
                 if (inputType.equals(PdfObject.TEXT_PDFDOCENCODING)) {
-                    createPDFfromBitmap(GroupDocumentActivity.current_group, arrayList, "temp");
+                    pdfFile = createPDFfromBitmap(GroupDocumentActivity.current_group, arrayList, "temp");
                 } else {
-                    createProtectedPDFfromBitmap(GroupDocumentActivity.current_group, arrayList, password, "temp");
+                    pdfFile = createProtectedPDFfromBitmap(GroupDocumentActivity.current_group, arrayList, password, "temp");
                 }
             } else if (inputType.equals(PdfObject.TEXT_PDFDOCENCODING)) {
-                createPDFfromBitmap(GroupDocumentActivity.current_group, singleBitmap, "temp");
+                pdfFile = createPDFfromBitmap(GroupDocumentActivity.current_group, singleBitmap, "temp");
             } else {
-                createProtectedPDFfromBitmap(GroupDocumentActivity.current_group, singleBitmap, password, "temp");
+                pdfFile = createProtectedPDFfromBitmap(GroupDocumentActivity.current_group, singleBitmap, password, "temp");
             }
             return null;
         }
@@ -937,7 +946,11 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
         @Override
         public void onPostExecute(String str) {
             super.onPostExecute(str);
-            Uri uRIFromFile = BaseActivity.getURIFromFile(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name) + "/" + GroupDocumentActivity.current_group + ".pdf", GroupDocumentActivity.this);
+            if (pdfFailed(pdfFile)) {
+                progressDialog.dismiss();
+                return;
+            }
+            Uri uRIFromFile = BaseActivity.getURIFromFile(pdfFile.getPath(), GroupDocumentActivity.this);
             if (shareType.equals("gmail")) {
                 Intent intent = new Intent();
                 intent.setAction("android.intent.action.SEND");
@@ -1024,6 +1037,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
     }
 
     private class saveAsPDF extends AsyncTask<String, Void, String> {
+        File pdfFile;
         String inputType;
         String password;
         String pdfName;
@@ -1049,10 +1063,10 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
         @Override
         public String doInBackground(String... strArr) {
             if (inputType.equals(PdfObject.TEXT_PDFDOCENCODING)) {
-                createPDFfromBitmap(pdfName, singleBitmap, "save");
+                pdfFile = createPDFfromBitmap(pdfName, singleBitmap, "save");
                 return null;
             }
-            createProtectedPDFfromBitmap(pdfName, singleBitmap, password, "save");
+            pdfFile = createProtectedPDFfromBitmap(pdfName, singleBitmap, password, "save");
             return null;
         }
 
@@ -1060,7 +1074,9 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
         public void onPostExecute(String str) {
             super.onPostExecute(str);
             progressDialog.dismiss();
-            Toast.makeText(GroupDocumentActivity.this, "Save Successfully", Toast.LENGTH_SHORT).show();
+            if (!pdfFailed(pdfFile)) {
+                Toast.makeText(GroupDocumentActivity.this, "Saved as " + pdfFile.getName(), Toast.LENGTH_SHORT).show();
+            }
         }
     }
 }

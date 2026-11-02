@@ -1147,8 +1147,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                 group_name = "Scanny" + Constant.getDateTime("_ddMMHHmmss");
                 group_date = Constant.getDateTime("yyyy-MM-dd  hh:mm a");
                 current_doc_name = "Doc_" + System.currentTimeMillis();
-                dbHelper.createDocTable(group_name);
-                dbHelper.addGroup(new DBModel(group_name, group_date, file.getPath(), Constant.current_tag));
+                group_name = dbHelper.createGroup(new DBModel(group_name, group_date, file.getPath(), Constant.current_tag));
                 dbHelper.addGroupDoc(group_name, file.getPath(), current_doc_name, "Insert text here...");
                 return null;
             }
@@ -1208,11 +1207,10 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                         bookImgList.add(new BookModel(bitmapList.get(i), current_doc_name, i));
                     } else if (i == 0) {
                         group_name = "Scanny" + Constant.getDateTime("_ddMMHHmmss");
-                        selected_group_name = group_name;
                         group_date = Constant.getDateTime("yyyy-MM-dd  hh:mm a");
                         current_doc_name = "Doc_" + System.currentTimeMillis();
-                        dbHelper.createDocTable(group_name);
-                        dbHelper.addGroup(new DBModel(group_name, group_date, file.getPath(), Constant.current_tag));
+                        group_name = dbHelper.createGroup(new DBModel(group_name, group_date, file.getPath(), Constant.current_tag));
+                        selected_group_name = group_name;
                         dbHelper.addGroupDoc(group_name, file.getPath(), current_doc_name, "Insert text here...");
                         bookImgList.add(new BookModel(bitmapList.get(i), current_doc_name, i));
                     } else {

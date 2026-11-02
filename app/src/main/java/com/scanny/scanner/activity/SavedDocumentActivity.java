@@ -133,7 +133,9 @@ public class SavedDocumentActivity extends BaseActivity implements View.OnClickL
                 ((TextView) dialog.findViewById(R.id.tv_delete)).setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
-                        if (Constant.inputType.equals("Group")) {
+                        // Read from the intent, not the static Constant.inputType: that resets to
+                        // "Group" after process death and turned "delete page" into "delete folder".
+                        if (getIntent().getBooleanExtra("is_new_group", false)) {
                             dataBaseHelper.deleteGroup(preview_doc_grp_name);
                         } else {
                             dataBaseHelper.deleteSingleDoc(preview_doc_grp_name, current_doc_name);

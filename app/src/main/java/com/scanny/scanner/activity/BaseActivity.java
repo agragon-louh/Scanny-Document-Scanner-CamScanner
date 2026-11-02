@@ -15,6 +15,7 @@ import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.Toast;
 
 import android.view.WindowManager;
 
@@ -266,81 +267,100 @@ public class BaseActivity extends AppCompatActivity {
         ((InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(view.getWindowToken(), 0);
     }
 
-    public void createPDFfromBitmap(String str, ArrayList<Bitmap> arrayList, String str2) {
-        Document document = new Document();
-        try {
-            File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name));
-            if (!file.exists()) {
-                file.mkdirs();
-            }
-            File file2 = pdfFileInside(file, str);
-            if (file2.exists()) {
-                file2.delete();
-            }
-            PdfWriter.getInstance(document, new FileOutputStream(file2)).setPageEvent(new HeaderAndFooterOfPDf());
-            document.open();
-            document.addCreationDate();
-            document.addAuthor(getResources().getString(R.string.app_name));
-            document.addCreator(getResources().getString(R.string.app_name));
-            Iterator<Bitmap> it = arrayList.iterator();
-            while (it.hasNext()) {
-                document.setPageSize(PageSize.A4);
-                document.newPage();
-                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                it.next().compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream);
-                Image instance = Image.getInstance(byteArrayOutputStream.toByteArray());
-                instance.scaleToFit(PageSize.A4.getWidth(), PageSize.A4.getHeight());
-                instance.setAbsolutePosition((PageSize.A4.getWidth() - instance.getScaledWidth()) / 2.0f, (PageSize.A4.getHeight() - instance.getScaledHeight()) / 2.0f);
-                document.add(instance);
-            }
-            document.close();
-        } catch (DocumentException | IOException e) {
-            Log.e(TAG, "Make Folder to PDF: " + e.getMessage());
-        }
+    /**
+     * Writes {@code pages} to a PDF and returns the file, or null on failure (callers must not
+     * report success or share anything then).
+     *
+     * <p>{@code mode} "temp" (open/share) writes to the app's private cache, replacing the
+     * previous copy. Any other mode is a user export to Download/Scanny and never overwrites an
+     * existing file. Previously both went to Download/Scanny/&lt;name&gt;.pdf, so opening or
+     * sharing a page silently replaced the user's saved export.
+     */
+    public File createPDFfromBitmap(String str, ArrayList<Bitmap> arrayList, String str2) {
+        File dir = str2.equals("temp") ? new File(getCacheDir(), "pdf")
+                : new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name));
+        return writePdf(dir, str, arrayList, null, str2.equals("temp"));
     }
 
-    public void createProtectedPDFfromBitmap(String str, ArrayList<Bitmap> arrayList, String str2, String str3) {
+    public File createProtectedPDFfromBitmap(String str, ArrayList<Bitmap> arrayList, String str2, String str3) {
+        File dir = str3.equals("temp") ? new File(getCacheDir(), "pdf")
+                : new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name) + "/Download");
+        return writePdf(dir, str, arrayList, str2, str3.equals("temp"));
+    }
+
+    /** Shows an error toast and returns true when {@code pdf} (from createPDF...) is null. */
+    protected boolean pdfFailed(File pdf) {
+        if (pdf != null) {
+            return false;
+        }
+        Toast.makeText(this, "Could not create the PDF", Toast.LENGTH_SHORT).show();
+        return true;
+    }
+
+    private File writePdf(File dir, String name, ArrayList<Bitmap> pages, String password, boolean replace) {
+        File file = null;
         Document document = new Document();
         try {
-            if (str3.equals("temp")) {
-                File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name));
-                if (!file.exists()) {
-                    file.mkdirs();
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+            File target = pdfFileInside(dir, name);
+            if (replace) {
+                if (target.exists() && !target.delete()) {
+                    throw new IOException("Cannot replace " + target.getName());
                 }
-                File file2 = pdfFileInside(file, str);
-                if (file2.exists()) {
-                    file2.delete();
-                }
-                PdfWriter.getInstance(document, new FileOutputStream(file2)).setEncryption(str2.getBytes(java.nio.charset.StandardCharsets.UTF_8), randomOwnerPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8), PdfWriter.ALLOW_PRINTING, PdfWriter.ENCRYPTION_AES_256);
             } else {
-                File file3 = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name) + "/Download");
-                if (!file3.exists()) {
-                    file3.mkdirs();
+                for (int i = 1; target.exists(); i++) {
+                    target = pdfFileInside(dir, name + " (" + i + ")");
                 }
-                File file4 = pdfFileInside(file3, str);
-                if (file4.exists()) {
-                    file4.delete();
-                }
-                PdfWriter.getInstance(document, new FileOutputStream(file4)).setEncryption(str2.getBytes(java.nio.charset.StandardCharsets.UTF_8), randomOwnerPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8), PdfWriter.ALLOW_PRINTING, PdfWriter.ENCRYPTION_AES_256);
+            }
+            // Only set once the target is ours, so the cleanup below never deletes an old export.
+            file = target;
+            PdfWriter writer = PdfWriter.getInstance(document, new FileOutputStream(file));
+            if (password == null) {
+                writer.setPageEvent(new HeaderAndFooterOfPDf());
+            } else {
+                writer.setEncryption(password.getBytes(java.nio.charset.StandardCharsets.UTF_8), randomOwnerPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8), PdfWriter.ALLOW_PRINTING, PdfWriter.ENCRYPTION_AES_256);
             }
             document.open();
             document.addCreationDate();
             document.addAuthor(getResources().getString(R.string.app_name));
             document.addCreator(getResources().getString(R.string.app_name));
-            Iterator<Bitmap> it = arrayList.iterator();
+            int pageCount = 0;
+            Iterator<Bitmap> it = pages.iterator();
             while (it.hasNext()) {
+                Bitmap page = it.next();
+                if (page == null) {
+                    // Missing or unreadable image file: skip the page instead of crashing.
+                    continue;
+                }
                 document.setPageSize(PageSize.A4);
                 document.newPage();
                 ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                it.next().compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream);
+                page.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream);
                 Image instance = Image.getInstance(byteArrayOutputStream.toByteArray());
                 instance.scaleToFit(PageSize.A4.getWidth(), PageSize.A4.getHeight());
                 instance.setAbsolutePosition((PageSize.A4.getWidth() - instance.getScaledWidth()) / 2.0f, (PageSize.A4.getHeight() - instance.getScaledHeight()) / 2.0f);
                 document.add(instance);
+                pageCount++;
+            }
+            if (pageCount == 0) {
+                throw new IOException("No readable pages");
             }
             document.close();
-        } catch (DocumentException | IOException e) {
+            return file;
+        } catch (DocumentException | IOException | RuntimeException e) {
             Log.e(TAG, "Make Folder to PDF: " + e.getMessage());
+            if (document.isOpen()) {
+                try {
+                    document.close();
+                } catch (RuntimeException ignored) {
+                }
+            }
+            if (file != null) {
+                file.delete();
+            }
+            return null;
         }
     }
 

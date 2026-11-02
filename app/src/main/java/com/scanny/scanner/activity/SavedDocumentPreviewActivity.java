@@ -341,10 +341,13 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
                     Toast.makeText(SavedDocumentPreviewActivity.this, "Please Enter Valid Document Name!", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                dataBaseHelper.updateGroupName(SavedDocumentPreviewActivity.this, str, editText.getText().toString().trim());
+                String newName = editText.getText().toString().trim();
+                if (!dataBaseHelper.updateGroupName(SavedDocumentPreviewActivity.this, str, newName)) {
+                    return;
+                }
                 dialog.dismiss();
-                edit_doc_grp_name = editText.getText().toString();
-                GroupDocumentActivity.current_group = editText.getText().toString();
+                edit_doc_grp_name = newName;
+                GroupDocumentActivity.current_group = newName;
             }
         });
         ((TextView) dialog.findViewById(R.id.tv_cancel)).setOnClickListener(new View.OnClickListener() {
@@ -523,7 +526,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
         @Override
         public String doInBackground(String... strArr) {
             currentDocList.clear();
-            currentDocList.addAll(dataBaseHelper.getGroupDocs(edit_doc_grp_name.replace(" ", "")));
+            currentDocList.addAll(dataBaseHelper.getGroupDocs(edit_doc_grp_name));
             return null;
         }
 
@@ -567,6 +570,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
     }
 
     public class openPDF extends AsyncTask<String, Void, String> {
+        File pdfFile;
         ArrayList<Bitmap> current_bitmap;
         String group_name;
         ProgressDialog progressDialog;
@@ -589,14 +593,18 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
 
         @Override
         public String doInBackground(String... strArr) {
-            createPDFfromBitmap(group_name, current_bitmap, "temp");
+            pdfFile = createPDFfromBitmap(group_name, current_bitmap, "temp");
             return null;
         }
 
         @Override
         public void onPostExecute(String str) {
             super.onPostExecute(str);
-            pdfUri = BaseActivity.getURIFromFile(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name) + "/" + group_name + ".pdf", SavedDocumentPreviewActivity.this);
+            if (pdfFailed(pdfFile)) {
+                progressDialog.dismiss();
+                return;
+            }
+            pdfUri = BaseActivity.getURIFromFile(pdfFile.getPath(), SavedDocumentPreviewActivity.this);
             progressDialog.dismiss();
             selected_group_name = group_name;
             Constant.IdentifyActivity = "PDFViewerActivity_Preview";
@@ -647,7 +655,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
                 dataBaseHelper.updateGroupListDoc(edit_doc_grp_name, current_doc_name, file.getPath());
             }
             currentDocList.clear();
-            currentDocList = dataBaseHelper.getGroupDocs(edit_doc_grp_name.replace(" ", ""));
+            currentDocList = dataBaseHelper.getGroupDocs(edit_doc_grp_name);
             return null;
         }
 
@@ -662,6 +670,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
     }
 
     private class shareAsPDF extends AsyncTask<String, Void, String> {
+        File pdfFile;
         private ArrayList<Bitmap> bitmap;
         private String inputType;
         private String password;
@@ -687,17 +696,21 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
         @Override
         public String doInBackground(String... strArr) {
             if (inputType.equals(PdfObject.TEXT_PDFDOCENCODING)) {
-                createPDFfromBitmap(edit_doc_grp_name, bitmap, "temp");
+                pdfFile = createPDFfromBitmap(edit_doc_grp_name, bitmap, "temp");
                 return null;
             }
-            createProtectedPDFfromBitmap(edit_doc_grp_name, bitmap, password, "temp");
+            pdfFile = createProtectedPDFfromBitmap(edit_doc_grp_name, bitmap, password, "temp");
             return null;
         }
 
         @Override
         public void onPostExecute(String str) {
             super.onPostExecute(str);
-            Uri uRIFromFile = BaseActivity.getURIFromFile(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name) + "/" + edit_doc_grp_name + ".pdf", SavedDocumentPreviewActivity.this);
+            if (pdfFailed(pdfFile)) {
+                progressDialog.dismiss();
+                return;
+            }
+            Uri uRIFromFile = BaseActivity.getURIFromFile(pdfFile.getPath(), SavedDocumentPreviewActivity.this);
             Intent intent = new Intent();
             intent.setAction("android.intent.action.SEND");
             intent.setType("application/pdf");
@@ -751,7 +764,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
                 dataBaseHelper.updateGroupListDoc(edit_doc_grp_name, current_doc_name, file.getPath());
             }
             currentDocList.clear();
-            currentDocList = dataBaseHelper.getGroupDocs(edit_doc_grp_name.replace(" ", ""));
+            currentDocList = dataBaseHelper.getGroupDocs(edit_doc_grp_name);
             return null;
         }
 
