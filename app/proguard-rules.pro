@@ -23,3 +23,30 @@
 -keep class me.pqpo.smartcropperlib.**{*;}
 -keep class com.shockwave.**
 -keep class com.android.vending.billing.**
+
+# ---------------------------------------------------------------------------
+# Security: strip android.util.Log calls from release builds. The app logged
+# document names, SQL statements, QR-code contents and PDF metadata.
+# ---------------------------------------------------------------------------
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+    public static int w(...);
+    public static int e(...);
+}
+
+# iText 5 references optional classes (BouncyCastle CMS, AWT) not present on Android.
+-dontwarn com.itextpdf.**
+-dontwarn org.bouncycastle.**
+-keep class com.itextpdf.** { *; }
+-keep class org.bouncycastle.** { *; }
+
+# jp.wasabeef RichEditor uses a JavaScript interface.
+-keepclassmembers class jp.wasabeef.richeditor.RichEditor$* {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+# OpenCV JNI bridge in :scanlibrary (native code looks these up by name).
+-keep class com.scanlibrary.** { *; }
+-keep class org.opencv.** { *; }

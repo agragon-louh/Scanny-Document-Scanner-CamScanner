@@ -1,5 +1,6 @@
 package com.scanny.scanner.activity;
 
+import androidx.core.content.ContextCompat;
 import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.content.BroadcastReceiver;
@@ -110,13 +111,13 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
     @Override
     public void onResume() {
         super.onResume();
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentEditorActivity_SavedPreview"));
+        ContextCompat.registerReceiver(SavedDocumentPreviewActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentEditorActivity_SavedPreview"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".PDFViewerActivity_Preview"));
+        ContextCompat.registerReceiver(SavedDocumentPreviewActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".PDFViewerActivity_Preview"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".NoteActivity_Preview"));
+        ContextCompat.registerReceiver(SavedDocumentPreviewActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".NoteActivity_Preview"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".ImageToTextActivity_Preview"));
+        ContextCompat.registerReceiver(SavedDocumentPreviewActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".ImageToTextActivity_Preview"), ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     @Override

@@ -1,33 +1,36 @@
-apply plugin: 'com.android.library'
+plugins {
+    id 'com.android.library'
+}
 
 android {
-    compileSdkVersion 30
-    buildToolsVersion "29.0.3"
+    namespace 'com.scanlibrary'
+    compileSdk 37
 
     defaultConfig {
-        minSdkVersion 19
-        targetSdkVersion 30
-        versionCode 1
-        versionName "1.0"
-        ndk
-                {
-                    moduleName "Scanner"
-                }
+        minSdk 23
+        consumerProguardFiles 'proguard-rules.pro'
     }
-    sourceSets.main
-            {
-                jni.srcDirs = []
-                jniLibs.srcDir 'src/main/libs'
-            }
+
+    // Prebuilt native libraries (OpenCV + libScanner.so). The NDK sources in src/main/jni are
+    // not built by Gradle; see FABLE_REVIEW.md about rebuilding them with 16 KB alignment.
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/libs']
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
     buildTypes {
         release {
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
 }
 
 dependencies {
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
+    implementation 'androidx.core:core:1.16.0'
 }

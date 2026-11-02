@@ -40,12 +40,12 @@ public class MyApp extends Application {
         SharedPreferences sharedPreferences = getSharedPreferences(Constant.PREFS_NAME, Context.MODE_PRIVATE);
         sharedPreferences.edit().putInt(Constant.KEY_THEME, Constant.THEME_DARK).apply();
 
-        // Enable verbose OneSignal logging to debug issues if needed.
-        OneSignal.setLogLevel(OneSignal.LOG_LEVEL.VERBOSE, OneSignal.LOG_LEVEL.NONE);
-
-        // OneSignal Initialization
-        OneSignal.initWithContext(this);
-        OneSignal.setAppId(ONESIGNAL_APP_ID);
+        // OneSignal (SDK 5.x). Verbose logging was previously forced on in every build, which
+        // leaks push tokens / user ids to logcat; it is now left at the SDK default.
+        // Skip initialisation while the app id is still the template placeholder.
+        if (!ONESIGNAL_APP_ID.contains("#")) {
+            OneSignal.initWithContext(this, ONESIGNAL_APP_ID);
+        }
 
         initTheme();
     }

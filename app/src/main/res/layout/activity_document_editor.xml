@@ -63,7 +63,7 @@
                 android:layout_height="match_parent"
                 android:gravity="center">
 
-                <!-- <com.takwolf.android.aspectratio.AspectRatioLayout
+                <!-- <com.scanny.scanner.widget.AspectRatioLayout
                      android:id="@+id/ly_aspectratio"
                      android:layout_width="match_parent"
                      android:layout_height="match_parent"
@@ -91,7 +91,7 @@
                     android:alpha="0.3"
                     android:scaleType="fitXY"
                     android:visibility="gone" />
-                <!--                </com.takwolf.android.aspectratio.AspectRatioLayout>-->
+                <!--                </com.scanny.scanner.widget.AspectRatioLayout>-->
             </RelativeLayout>
         </LinearLayout>
 
@@ -646,14 +646,14 @@
             android:layout_height="match_parent"
             android:layout_above="@+id/rl_bottom">
 
-            <com.kyanogen.signatureview.SignatureView
+            <com.scanny.scanner.widget.SignatureView
                 android:id="@+id/signature_view"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                app:backgroundColor="#00000000"
-                app:enableSignature="true"
-                app:penColor="@color/txt_color"
-                app:penSize="5dp" />
+                app:sv_backgroundColor="#00000000"
+                app:sv_enableSignature="true"
+                app:sv_penColor="@color/txt_color"
+                app:sv_penSize="5dp" />
 
 
             <RelativeLayout
@@ -794,7 +794,7 @@
                     android:textColor="@color/white"
                     android:textSize="@dimen/_11sdp" />
 
-                <com.divyanshu.colorseekbar.ColorSeekBar
+                <com.scanny.scanner.widget.ColorSeekBar
                     android:id="@+id/sb_pen_color"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -804,7 +804,7 @@
                     android:layout_toEndOf="@+id/tv_pen_color"
                     android:paddingTop="@dimen/_5sdp"
                     android:paddingBottom="@dimen/_5sdp"
-                    app:colorSeeds="@array/colors" />
+                    app:csb_colorSeeds="@array/colors" />
             </RelativeLayout>
         </LinearLayout>
 
@@ -945,7 +945,7 @@
                         android:textColor="@color/txt_color"
                         android:textSize="@dimen/_11sdp" />
 
-                    <com.divyanshu.colorseekbar.ColorSeekBar
+                    <com.scanny.scanner.widget.ColorSeekBar
                         android:id="@+id/sb_watermark_color"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -955,7 +955,7 @@
                         android:layout_toEndOf="@+id/tv_watermark_color"
                         android:paddingTop="@dimen/_5sdp"
                         android:paddingBottom="@dimen/_5sdp"
-                        app:colorSeeds="@array/colors" />
+                        app:csb_colorSeeds="@array/colors" />
                 </RelativeLayout>
 
                 <RelativeLayout
@@ -1207,7 +1207,7 @@
                     android:textColor="@color/white"
                     android:textSize="@dimen/_11sdp" />
 
-                <com.divyanshu.colorseekbar.ColorSeekBar
+                <com.scanny.scanner.widget.ColorSeekBar
                     android:id="@+id/sb_txt_color"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -1217,7 +1217,7 @@
                     android:layout_toEndOf="@+id/tv_txt_color"
                     android:paddingTop="@dimen/_5sdp"
                     android:paddingBottom="@dimen/_5sdp"
-                    app:colorSeeds="@array/colors" />
+                    app:csb_colorSeeds="@array/colors" />
             </RelativeLayout>
 
             <LinearLayout

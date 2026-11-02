@@ -16,8 +16,15 @@ import android.util.Log;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 
+import android.view.WindowManager;
+
+import androidx.activity.EdgeToEdge;
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import com.itextpdf.text.Document;
 import com.itextpdf.text.DocumentException;
@@ -34,6 +41,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Iterator;
 
@@ -90,7 +98,69 @@ public class BaseActivity extends AppCompatActivity {
 
     @Override
     public void onCreate(Bundle bundle) {
+        // Apps targeting API 35+ are always drawn edge-to-edge. Enable it explicitly so older
+        // Android versions behave the same, then pad the content in onPostCreate().
+        EdgeToEdge.enable(this);
         super.onCreate(bundle);
+        // Predictive back (default for apps targeting API 36+) no longer calls an overridden
+        // Activity#onBackPressed(). Route the system back gesture through handleBack() instead;
+        // explicit onBackPressed() calls (toolbar back buttons) still end up here as well.
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                handleBack();
+            }
+        });
+    }
+
+    /** Called for system back and for onBackPressed(). Subclasses override for custom behaviour. */
+    protected void handleBack() {
+        finish();
+    }
+
+    @Override
+    protected void onPostCreate(Bundle savedInstanceState) {
+        super.onPostCreate(savedInstanceState);
+        View content = findViewById(android.R.id.content);
+        if (content == null) {
+            return;
+        }
+        int adjust = getWindow().getAttributes().softInputMode & WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST;
+        final boolean padForKeyboard = adjust != WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+                && adjust != WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN;
+        ViewCompat.setOnApplyWindowInsetsListener(content, (view, windowInsets) -> {
+            Insets bars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
+            int bottom = bars.bottom;
+            if (padForKeyboard) {
+                bottom = Math.max(bottom, windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom);
+            }
+            view.setPadding(bars.left, bars.top, bars.right, bottom);
+            return WindowInsetsCompat.CONSUMED;
+        });
+        ViewCompat.requestApplyInsets(content);
+    }
+
+    /**
+     * Resolves {@code name + ".pdf"} inside {@code dir} and refuses names that would escape it
+     * (e.g. a document called "../../something"), since names are user supplied.
+     */
+    protected static File pdfFileInside(File dir, String name) throws IOException {
+        File file = new File(dir, name + ".pdf");
+        String dirPath = dir.getCanonicalPath() + File.separator;
+        if (!file.getCanonicalPath().startsWith(dirPath)) {
+            throw new IOException("Invalid document name");
+        }
+        return file;
+    }
+
+    private static String randomOwnerPassword() {
+        byte[] bytes = new byte[24];
+        new SecureRandom().nextBytes(bytes);
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 
     public Bitmap getMainFrameBitmap(View view) {
@@ -111,19 +181,19 @@ public class BaseActivity extends AppCompatActivity {
     }
 
     public void saveImageToGallery(String path, Context context) {
-        ContentValues contentValues = new ContentValues();
-        contentValues.put("datetaken", Long.valueOf(System.currentTimeMillis()));
-        contentValues.put("mime_type", "image/jpeg");
-        contentValues.put("_data", path);
-        context.getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues);
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) {
+            ContentValues contentValues = new ContentValues();
+            contentValues.put("datetaken", Long.valueOf(System.currentTimeMillis()));
+            contentValues.put("mime_type", "image/jpeg");
+            contentValues.put("_data", path);
+            context.getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues);
+        }
+        // On Android 10+ inserting a raw "_data" path is rejected for files outside DCIM/ or
+        // Pictures/ (IllegalArgumentException -> crash in the AsyncTask). The media scanner
+        // indexes the file written to Download/Scanny/Images on its own.
 
         MediaScannerConnection.scanFile(this, new String[]{path}, null,
-                new MediaScannerConnection.OnScanCompletedListener() {
-                    public void onScanCompleted(String path, Uri uri) {
-                        Log.i("ExternalStorage", "Scanned " + path + ":");
-                        Log.i("ExternalStorage", "-> uri=" + uri);
-                    }
-                });
+                null);
     }
 
     public String[] getColorFilterName() {
@@ -171,7 +241,6 @@ public class BaseActivity extends AppCompatActivity {
             int i = 0;
             while (i < list.length) {
                 try {
-                    Log.e(TAG, "font: " + list[i]);
                     arrayList.add(list[i]);
                     i++;
                 } catch (Exception e) {
@@ -204,7 +273,7 @@ public class BaseActivity extends AppCompatActivity {
             if (!file.exists()) {
                 file.mkdirs();
             }
-            File file2 = new File(file, str + ".pdf");
+            File file2 = pdfFileInside(file, str);
             if (file2.exists()) {
                 file2.delete();
             }
@@ -238,21 +307,21 @@ public class BaseActivity extends AppCompatActivity {
                 if (!file.exists()) {
                     file.mkdirs();
                 }
-                File file2 = new File(file, str + ".pdf");
+                File file2 = pdfFileInside(file, str);
                 if (file2.exists()) {
                     file2.delete();
                 }
-                PdfWriter.getInstance(document, new FileOutputStream(file2)).setEncryption(str2.getBytes(), str2.getBytes(), 2052, 2);
+                PdfWriter.getInstance(document, new FileOutputStream(file2)).setEncryption(str2.getBytes(java.nio.charset.StandardCharsets.UTF_8), randomOwnerPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8), PdfWriter.ALLOW_PRINTING, PdfWriter.ENCRYPTION_AES_256);
             } else {
                 File file3 = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name) + "/Download");
                 if (!file3.exists()) {
                     file3.mkdirs();
                 }
-                File file4 = new File(file3, str + ".pdf");
+                File file4 = pdfFileInside(file3, str);
                 if (file4.exists()) {
                     file4.delete();
                 }
-                PdfWriter.getInstance(document, new FileOutputStream(file4)).setEncryption(str2.getBytes(), str2.getBytes(), 2052, 2);
+                PdfWriter.getInstance(document, new FileOutputStream(file4)).setEncryption(str2.getBytes(java.nio.charset.StandardCharsets.UTF_8), randomOwnerPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8), PdfWriter.ALLOW_PRINTING, PdfWriter.ENCRYPTION_AES_256);
             }
             document.open();
             document.addCreationDate();

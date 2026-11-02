@@ -1,5 +1,6 @@
 package com.scanny.scanner.activity;
 
+import androidx.core.content.ContextCompat;
 import android.app.ProgressDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -84,9 +85,9 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
     @Override
     public void onResume() {
         super.onResume();
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentEditorActivity_Crop"));
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".CurrentFilterActivity"));
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".ScannerActivity_Retake"));
+        ContextCompat.registerReceiver(CropDocumentActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentEditorActivity_Crop"), ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(CropDocumentActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".CurrentFilterActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(CropDocumentActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".ScannerActivity_Retake"), ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     @Override

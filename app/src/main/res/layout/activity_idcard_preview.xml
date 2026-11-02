@@ -60,7 +60,7 @@
             android:layout_height="match_parent"
             android:background="@color/bg_color" />
 
-        <com.takwolf.android.aspectratio.AspectRatioLayout
+        <com.scanny.scanner.widget.AspectRatioLayout
             android:id="@+id/aspectRatioLayout"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
@@ -70,7 +70,7 @@
                 android:id="@+id/stickerHolderView"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
-        </com.takwolf.android.aspectratio.AspectRatioLayout>
+        </com.scanny.scanner.widget.AspectRatioLayout>
 
         <LinearLayout
             android:id="@+id/ly_scrap_view"

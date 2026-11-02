@@ -1,32 +1,43 @@
 package com.scanny.scanner.activity;
 
+import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Bundle;
-import android.util.Log;
+import android.os.ParcelFileDescriptor;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
-import com.github.barteksc.pdfviewer.PDFView;
-import com.github.barteksc.pdfviewer.listener.OnLoadCompleteListener;
-import com.github.barteksc.pdfviewer.listener.OnPageChangeListener;
-import com.github.barteksc.pdfviewer.listener.OnPageErrorListener;
-import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle;
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 import com.google.android.gms.ads.AdView;
 import com.scanny.scanner.R;
 import com.scanny.scanner.utils.AdsUtils;
-import com.shockwave.pdfium.PdfDocument;
 
-import java.util.List;
+import java.io.IOException;
 
-public class PDFViewerActivity extends BaseActivity implements OnPageChangeListener, OnLoadCompleteListener, OnPageErrorListener {
-    private static final String TAG = "PDFViewerActivity";
+/**
+ * Shows a PDF with the platform {@link PdfRenderer}.
+ *
+ * <p>Previously used {@code com.github.barteksc:android-pdf-viewer} (JCenter-only, no longer
+ * downloadable, unmaintained, and bundling native pdfium libraries that are not 16 KB
+ * page-size aligned). The old code also logged the document's metadata to logcat.</p>
+ */
+public class PDFViewerActivity extends BaseActivity {
     protected Uri pdf_uri;
     protected String title;
     protected TextView tv_page;
     protected TextView tv_title;
-    private int page_no = 0;
-    private PDFView pdfView;
+    private RecyclerView pdfView;
     private AdView adView;
+    private ParcelFileDescriptor fileDescriptor;
+    private PdfRenderer renderer;
 
     @Override
     public void onCreate(Bundle bundle) {
@@ -41,56 +52,122 @@ public class PDFViewerActivity extends BaseActivity implements OnPageChangeListe
 
         tv_title = (TextView) findViewById(R.id.tv_title);
         tv_page = (TextView) findViewById(R.id.tv_page);
-        pdfView = (PDFView) findViewById(R.id.pdfView);
+        pdfView = (RecyclerView) findViewById(R.id.pdfView);
         pdfView.setBackgroundColor(getResources().getColor(R.color.bg_color));
         title = getIntent().getStringExtra("title");
         tv_title.setText(title);
-        pdf_uri = Uri.parse(getIntent().getStringExtra("pdf_path"));
-        loadPDF(pdf_uri);
         findViewById(R.id.iv_back).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 onBackPressed();
             }
         });
+        String path = getIntent().getStringExtra("pdf_path");
+        if (path == null) {
+            finish();
+            return;
+        }
+        pdf_uri = Uri.parse(path);
+        loadPDF(pdf_uri);
     }
 
     private void loadPDF(Uri uri) {
-        pdfView.fromUri(uri).defaultPage(page_no).onPageChange(this).enableAnnotationRendering(true).onLoad(this).scrollHandle(new DefaultScrollHandle(this)).spacing(12).onPageError(this).load();
-    }
-
-    @Override
-    public void loadComplete(int i) {
-        PdfDocument.Meta documentMeta = pdfView.getDocumentMeta();
-        Log.e(TAG, "title = " + documentMeta.getTitle());
-        Log.e(TAG, "author = " + documentMeta.getAuthor());
-        Log.e(TAG, "subject = " + documentMeta.getSubject());
-        Log.e(TAG, "keywords = " + documentMeta.getKeywords());
-        Log.e(TAG, "creator = " + documentMeta.getCreator());
-        Log.e(TAG, "producer = " + documentMeta.getProducer());
-        Log.e(TAG, "creationDate = " + documentMeta.getCreationDate());
-        Log.e(TAG, "modDate = " + documentMeta.getModDate());
-        printBookmarksTree(pdfView.getTableOfContents(), "-");
-    }
-
-    public void printBookmarksTree(List<PdfDocument.Bookmark> list, String str) {
-        for (PdfDocument.Bookmark next : list) {
-            Log.e(TAG, String.format("%s %s, p %d", new Object[]{str, next.getTitle(), Long.valueOf(next.getPageIdx())}));
-            if (next.hasChildren()) {
-                List<PdfDocument.Bookmark> children = next.getChildren();
-                printBookmarksTree(children, str + "-");
+        try {
+            fileDescriptor = getContentResolver().openFileDescriptor(uri, "r");
+            if (fileDescriptor == null) {
+                throw new IOException("Cannot open " + uri);
             }
+            renderer = new PdfRenderer(fileDescriptor);
+        } catch (IOException | SecurityException e) {
+            // SecurityException: password-protected PDFs cannot be rendered by PdfRenderer.
+            Toast.makeText(this, "Unable to open this PDF", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+        final LinearLayoutManager layoutManager = new LinearLayoutManager(this);
+        pdfView.setLayoutManager(layoutManager);
+        pdfView.setAdapter(new PageAdapter());
+        updatePageLabel(0);
+        pdfView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                int position = layoutManager.findFirstVisibleItemPosition();
+                if (position != RecyclerView.NO_POSITION) {
+                    updatePageLabel(position);
+                }
+            }
+        });
+    }
+
+    private void updatePageLabel(int page) {
+        if (renderer != null) {
+            tv_page.setText(String.format("%s / %s", page + 1, renderer.getPageCount()));
         }
     }
 
     @Override
-    public void onPageChanged(int i, int i2) {
-        page_no = i;
-        tv_page.setText(String.format("%s / %s", new Object[]{Integer.valueOf(i + 1), Integer.valueOf(i2)}));
+    protected void onDestroy() {
+        if (renderer != null) {
+            renderer.close();
+            renderer = null;
+        }
+        if (fileDescriptor != null) {
+            try {
+                fileDescriptor.close();
+            } catch (IOException ignored) {
+            }
+            fileDescriptor = null;
+        }
+        super.onDestroy();
     }
 
-    @Override
-    public void onPageError(int i, Throwable th) {
-        Log.e(TAG, "Cannot load page " + i);
+    private class PageAdapter extends RecyclerView.Adapter<PageAdapter.Holder> {
+        class Holder extends RecyclerView.ViewHolder {
+            final ImageView imageView;
+
+            Holder(ImageView imageView) {
+                super(imageView);
+                this.imageView = imageView;
+            }
+        }
+
+        @NonNull
+        @Override
+        public Holder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            ImageView imageView = new ImageView(parent.getContext());
+            RecyclerView.LayoutParams lp = new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            int spacing = (int) (6 * getResources().getDisplayMetrics().density);
+            lp.setMargins(0, spacing, 0, spacing);
+            imageView.setLayoutParams(lp);
+            imageView.setAdjustViewBounds(true);
+            imageView.setBackgroundColor(Color.WHITE);
+            return new Holder(imageView);
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull Holder holder, int position) {
+            if (renderer == null) {
+                return;
+            }
+            int targetWidth = pdfView.getWidth() > 0 ? pdfView.getWidth() : getResources().getDisplayMetrics().widthPixels;
+            synchronized (PDFViewerActivity.this) {
+                PdfRenderer.Page page = renderer.openPage(position);
+                try {
+                    int width = Math.max(1, targetWidth);
+                    int height = Math.max(1, (int) ((float) page.getHeight() * width / page.getWidth()));
+                    Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+                    bitmap.eraseColor(Color.WHITE);
+                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                    holder.imageView.setImageBitmap(bitmap);
+                } finally {
+                    page.close();
+                }
+            }
+        }
+
+        @Override
+        public int getItemCount() {
+            return renderer == null ? 0 : renderer.getPageCount();
+        }
     }
 }

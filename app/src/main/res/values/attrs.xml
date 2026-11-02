@@ -14,4 +14,17 @@
         <attr name="barcode_borderAlpha" format="float" />
         <attr name="finderOffset" format="dimension" />
     </declare-styleable>
+
+    <!-- com.scanny.scanner.widget.ColorSeekBar (replaces com.divyanshu.colorseekbar) -->
+    <declare-styleable name="ColorSeekBar">
+        <attr name="csb_colorSeeds" format="reference" />
+    </declare-styleable>
+
+    <!-- com.scanny.scanner.widget.SignatureView (replaces com.kyanogen.signatureview) -->
+    <declare-styleable name="SignatureView">
+        <attr name="sv_penColor" format="color" />
+        <attr name="sv_penSize" format="dimension" />
+        <attr name="sv_backgroundColor" format="color" />
+        <attr name="sv_enableSignature" format="boolean" />
+    </declare-styleable>
 </resources>

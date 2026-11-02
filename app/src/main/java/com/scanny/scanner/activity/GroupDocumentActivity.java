@@ -42,8 +42,8 @@ import com.google.android.gms.ads.AdView;
 import com.google.android.gms.ads.nativead.NativeAdView;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.itextpdf.text.pdf.PdfObject;
-import com.nguyenhoanglam.imagepicker.model.Image;
-import com.nguyenhoanglam.imagepicker.ui.imagepicker.ImagePicker;
+import com.scanny.scanner.picker.Image;
+import com.scanny.scanner.picker.ImagePicker;
 import com.scanny.scanner.R;
 import com.scanny.scanner.adapter.GroupDocAdapter;
 import com.scanny.scanner.db.DBHelper;
@@ -130,15 +130,15 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
         new setGroupDocAdapter().execute(new String[0]);
         super.onResume();
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".PDFViewerActivity2"));
+        ContextCompat.registerReceiver(GroupDocumentActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".PDFViewerActivity2"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentGalleryActivity"));
+        ContextCompat.registerReceiver(GroupDocumentActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentGalleryActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".CropDocumentActivity4"));
+        ContextCompat.registerReceiver(GroupDocumentActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".CropDocumentActivity4"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".ScannerActivity2"));
+        ContextCompat.registerReceiver(GroupDocumentActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".ScannerActivity2"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".SavedDocumentPreviewActivity"));
+        ContextCompat.registerReceiver(GroupDocumentActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".SavedDocumentPreviewActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     @Override
@@ -197,6 +197,12 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                 PopupMenu popupMenu = new PopupMenu(this, view);
                 popupMenu.setOnMenuItemClickListener(this);
                 popupMenu.inflate(R.menu.group_doc_more);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    // Public API since Android 10; the reflection below hits a non-SDK interface.
+                    popupMenu.setForceShowIcon(true);
+                    popupMenu.show();
+                    return;
+                }
                 try {
                     Field declaredField = PopupMenu.class.getDeclaredField("mPopup");
                     declaredField.setAccessible(true);
@@ -504,7 +510,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
         ((TextView) dialog.findViewById(R.id.tv_done)).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if (editText.getText().toString().equals("") || Character.isDigit(editText.getText().toString().charAt(0))) {
+                if (editText.getText().toString().trim().equals("") || Character.isDigit(editText.getText().toString().trim().charAt(0)) || !DBHelper.isValidGroupName(editText.getText().toString().trim())) {
                     Toast.makeText(GroupDocumentActivity.this, "Please Enter Valid Document Name!", Toast.LENGTH_SHORT).show();
                     return;
                 }

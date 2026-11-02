@@ -41,8 +41,8 @@ import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.target.SimpleTarget;
 import com.bumptech.glide.request.transition.Transition;
 import com.github.chrisbanes.photoview.PhotoView;
-import com.nguyenhoanglam.imagepicker.model.Image;
-import com.nguyenhoanglam.imagepicker.ui.imagepicker.ImagePicker;
+import com.scanny.scanner.picker.Image;
+import com.scanny.scanner.picker.ImagePicker;
 import com.otaliastudios.cameraview.CameraListener;
 import com.otaliastudios.cameraview.CameraView;
 import com.otaliastudios.cameraview.PictureResult;
@@ -237,17 +237,17 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
             ActivityCompat.requestPermissions(this, new String[]{"android.permission.CAMERA"}, 1);
         }
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".ScannerGalleryActivity"));
+        ContextCompat.registerReceiver(ScannerActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".ScannerGalleryActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".CropDocumentActivity2"));
+        ContextCompat.registerReceiver(ScannerActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".CropDocumentActivity2"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".IDCardPreviewActivity"));
+        ContextCompat.registerReceiver(ScannerActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".IDCardPreviewActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".SavedEditDocumentActivity3"));
+        ContextCompat.registerReceiver(ScannerActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".SavedEditDocumentActivity3"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".UcropActivity"));
+        ContextCompat.registerReceiver(ScannerActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".UcropActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentEditorActivity_Scanner"));
+        ContextCompat.registerReceiver(ScannerActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentEditorActivity_Scanner"), ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     @Override
@@ -1033,7 +1033,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
     }
 
     @Override
-    public void onBackPressed() {
+    protected void handleBack() {
         if (ly_crop.getVisibility() == View.VISIBLE) {
             ly_crop.setVisibility(View.GONE);
             ly_filter.setVisibility(View.GONE);

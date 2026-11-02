@@ -27,6 +27,10 @@ public class PrivacyPolicyActivity extends BaseActivity {
                 onBackPressed();
             }
         });
+        // Static policy page: no JavaScript, no local file / content access.
+        this.web.getSettings().setJavaScriptEnabled(false);
+        this.web.getSettings().setAllowFileAccess(false);
+        this.web.getSettings().setAllowContentAccess(false);
         this.web.loadUrl("https://scanny.flycricket.io/privacy.html");
     }
 }

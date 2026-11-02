@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 12+ backup / device-transfer rules. Scanned documents (ID cards, signatures,
+    notes) are sensitive, so they are excluded from cloud backup. Device-to-device transfer
+    keeps the platform default so users keep their documents when switching phones.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+</data-extraction-rules>

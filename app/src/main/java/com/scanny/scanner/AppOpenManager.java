@@ -6,9 +6,9 @@ import android.content.Context;
 import android.os.Bundle;
 import android.util.Log;
 
-import androidx.lifecycle.Lifecycle;
-import androidx.lifecycle.LifecycleObserver;
-import androidx.lifecycle.OnLifecycleEvent;
+import androidx.annotation.NonNull;
+import androidx.lifecycle.DefaultLifecycleObserver;
+import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.ProcessLifecycleOwner;
 
 import com.google.android.gms.ads.AdError;
@@ -17,7 +17,7 @@ import com.google.android.gms.ads.FullScreenContentCallback;
 import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.appopen.AppOpenAd;
 
-public class AppOpenManager implements Application.ActivityLifecycleCallbacks, LifecycleObserver {
+public class AppOpenManager implements Application.ActivityLifecycleCallbacks, DefaultLifecycleObserver {
     private static final String LOG_TAG = "AppOpenManager";
     /* access modifiers changed from: private */
     public static boolean isShowingAd = false;
@@ -59,7 +59,7 @@ public class AppOpenManager implements Application.ActivityLifecycleCallbacks, L
             };
             AdRequest adRequest = getAdRequest();
             Application application = this.myApplication;
-            AppOpenAd.load((Context) application, application.getApplicationContext().getResources().getString(R.string.admob_app_open_id), adRequest, 1, this.loadCallback);
+            AppOpenAd.load((Context) application, application.getApplicationContext().getResources().getString(R.string.admob_app_open_id), adRequest, this.loadCallback);
         }
     }
 
@@ -84,6 +84,9 @@ public class AppOpenManager implements Application.ActivityLifecycleCallbacks, L
                 boolean unused = AppOpenManager.isShowingAd = true;
             }
         });
+        if (this.currentActivity == null) {
+            return;
+        }
         this.appOpenAd.show(this.currentActivity);
     }
 
@@ -107,9 +110,8 @@ public class AppOpenManager implements Application.ActivityLifecycleCallbacks, L
         this.currentActivity = null;
     }
 
-    @OnLifecycleEvent(Lifecycle.Event.ON_START)
-    public void onStart() {
+    @Override
+    public void onStart(@NonNull LifecycleOwner owner) {
         showAdIfAvailable();
-        Log.d(LOG_TAG, "onStart");
     }
 }

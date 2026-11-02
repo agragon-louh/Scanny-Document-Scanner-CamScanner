@@ -1,5 +1,6 @@
 package com.scanny.scanner.activity;
 
+import androidx.core.content.ContextCompat;
 import android.app.Activity;
 import android.app.Dialog;
 import android.app.ProgressDialog;
@@ -30,8 +31,8 @@ import com.flask.colorpicker.ColorPickerView;
 import com.flask.colorpicker.OnColorSelectedListener;
 import com.flask.colorpicker.builder.ColorPickerClickListener;
 import com.flask.colorpicker.builder.ColorPickerDialogBuilder;
-import com.nguyenhoanglam.imagepicker.model.Image;
-import com.nguyenhoanglam.imagepicker.ui.imagepicker.ImagePicker;
+import com.scanny.scanner.picker.Image;
+import com.scanny.scanner.picker.ImagePicker;
 import com.scanny.scanner.R;
 import com.scanny.scanner.db.DBHelper;
 import com.scanny.scanner.main_utils.BitmapUtils;
@@ -43,7 +44,7 @@ import com.scanny.scanner.scrapbook.StickerConfigInterface;
 import com.scanny.scanner.scrapbook.StickerHolderView;
 import com.scanny.scanner.scrapbook.TextStickerConfig;
 import com.scanny.scanner.utils.AdsUtils;
-import com.takwolf.android.aspectratio.AspectRatioLayout;
+import com.scanny.scanner.widget.AspectRatioLayout;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -112,9 +113,9 @@ public class IDCardPreviewActivity extends BaseActivity implements View.OnClickL
     public void onResume() {
         super.onResume();
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentEditorActivity_IDCard"));
+        ContextCompat.registerReceiver(IDCardPreviewActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentEditorActivity_IDCard"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".IDCardGalleryActivity"));
+        ContextCompat.registerReceiver(IDCardPreviewActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".IDCardGalleryActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     @Override
@@ -294,7 +295,7 @@ public class IDCardPreviewActivity extends BaseActivity implements View.OnClickL
     }
 
     @Override
-    public void onBackPressed() {
+    protected void handleBack() {
         final Dialog dialog = new Dialog(this, R.style.ThemeWithRoundShape);
         dialog.requestWindowFeature(1);
         dialog.setContentView(R.layout.editor_screen_exit_dailog);

@@ -1,4 +1,36 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    // Repositories are declared once here; modules may not add their own.
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        // JitPack builds arbitrary GitHub repos on demand. Restrict it to the few
+        // com.github.* artifacts that are not published anywhere else, so that no other
+        // dependency can ever be resolved (or hijacked) through it.
+        maven {
+            url = uri('https://jitpack.io')
+            content {
+                includeGroup 'com.github.pqpo'          // SmartCropper
+                includeGroup 'com.github.chrisbanes'    // PhotoView
+                includeGroup 'com.github.QuadFlask'     // colorpicker
+                includeGroup 'com.github.yalantis'      // uCrop
+            }
+        }
+        // jcenter() was removed: JCenter is shut down (requests now redirect to Maven Central)
+        // and Gradle 9 removed the jcenter() shortcut. The JCenter-only libraries this app
+        // used were replaced by local code (see FABLE_REVIEW.md).
+    }
+}
+
+rootProject.name = "Scanny"
 include ':sticker'
 include ':scanlibrary'
 include ':app'
-rootProject.name = "Scanny"

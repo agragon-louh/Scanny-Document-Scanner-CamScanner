@@ -1,6 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Only expose the directories the app actually shares from. The previous config
+    (external-path ".") let any granted URI address the whole shared storage.
+-->
 <paths>
+    <!-- App-specific storage: Android/data/<pkg>/files/... (scans, documents, signatures) -->
+    <external-files-path
+        name="app_files"
+        path="." />
+    <!-- Exported PDFs / images / QR codes: Download/Scanny/... -->
     <external-path
-        name="external_files"
+        name="scanny_exports"
+        path="Download/Scanny/" />
+    <!-- :scanlibrary camera capture (ScanConstants.IMAGE_PATH) -->
+    <external-path
+        name="scan_sample"
+        path="Download/scanSample/" />
+    <cache-path
+        name="cache"
         path="." />
 </paths>

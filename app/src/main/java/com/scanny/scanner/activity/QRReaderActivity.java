@@ -16,7 +16,6 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.google.android.gms.actions.SearchIntents;
 import com.google.android.gms.ads.nativead.NativeAdView;
 import com.google.zxing.Result;
 import com.scanny.scanner.R;
@@ -78,8 +77,6 @@ public class QRReaderActivity extends BaseActivity implements ZXingScannerView.R
     @Override
     public void handleResult(Result result) {
         barcode_result = result.getText();
-        Log.e(TAG, result.getText());
-        Log.e(TAG, result.getBarcodeFormat().toString());
         new ToneGenerator(5, 100).startTone(24);
         final Dialog dialog = new Dialog(this, R.style.ThemeWithRoundShape);
         dialog.requestWindowFeature(1);
@@ -121,11 +118,16 @@ public class QRReaderActivity extends BaseActivity implements ZXingScannerView.R
                     intent = new Intent(Intent.ACTION_DIAL);
                     intent.setData(Uri.parse(barcode_result));
                 } else {
-                    intent = new Intent("android.intent.action.WEB_SEARCH");
-                    intent.setClassName("com.google.android.googlequicksearchbox", "com.google.android.googlequicksearchbox.SearchActivity");
-                    intent.putExtra(SearchIntents.EXTRA_QUERY, barcode_result);
+                    // Do not hard-code the Google app: it crashed with ActivityNotFoundException
+                    // on devices without it. Any web-search handler may answer.
+                    intent = new Intent(Intent.ACTION_WEB_SEARCH);
+                    intent.putExtra(android.app.SearchManager.QUERY, barcode_result);
                 }
-                startActivity(intent);
+                try {
+                    startActivity(intent);
+                } catch (android.content.ActivityNotFoundException e) {
+                    Toast.makeText(QRReaderActivity.this, "No app found to handle this action", Toast.LENGTH_SHORT).show();
+                }
                 dialog.dismiss();
             }
         });

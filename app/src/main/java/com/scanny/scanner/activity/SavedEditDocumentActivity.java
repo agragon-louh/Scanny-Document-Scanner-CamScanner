@@ -1,5 +1,6 @@
 package com.scanny.scanner.activity;
 
+import androidx.core.content.ContextCompat;
 import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.content.BroadcastReceiver;
@@ -118,11 +119,11 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
     @Override
     public void onResume() {
         super.onResume();
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentEditorActivity_SavedEdit"));
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentEditorActivity_SavedEdit2"));
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".PDFViewerActivity"));
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".NoteActivity"));
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".ImageToTextActivity"));
+        ContextCompat.registerReceiver(SavedEditDocumentActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentEditorActivity_SavedEdit"), ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(SavedEditDocumentActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentEditorActivity_SavedEdit2"), ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(SavedEditDocumentActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".PDFViewerActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(SavedEditDocumentActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".NoteActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(SavedEditDocumentActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".ImageToTextActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     @Override

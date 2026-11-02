@@ -43,16 +43,16 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.target.SimpleTarget;
 import com.bumptech.glide.request.transition.Transition;
-import com.divyanshu.colorseekbar.ColorSeekBar;
+import com.scanny.scanner.widget.ColorSeekBar;
 import com.flask.colorpicker.ColorPickerView;
 import com.flask.colorpicker.OnColorSelectedListener;
 import com.flask.colorpicker.builder.ColorPickerClickListener;
 import com.flask.colorpicker.builder.ColorPickerDialogBuilder;
 import com.google.android.gms.ads.nativead.NativeAdView;
 import com.itextpdf.text.html.HtmlTags;
-import com.kyanogen.signatureview.SignatureView;
-import com.nguyenhoanglam.imagepicker.model.Image;
-import com.nguyenhoanglam.imagepicker.ui.imagepicker.ImagePicker;
+import com.scanny.scanner.widget.SignatureView;
+import com.scanny.scanner.picker.Image;
+import com.scanny.scanner.picker.ImagePicker;
 import com.scanny.scanner.R;
 import com.scanny.scanner.adapter.ColorEffectAdapter;
 import com.scanny.scanner.adapter.ColorFilterAdapter;
@@ -69,8 +69,7 @@ import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.EditToolType;
 import com.scanny.scanner.utils.AdmobAds;
 import com.scanny.scanner.utils.AdsUtils;
-import com.watermark.androidwm_light.WatermarkBuilder;
-import com.watermark.androidwm_light.bean.WatermarkText;
+import com.scanny.scanner.widget.WatermarkUtil;
 import com.xiaopo.flying.sticker.BitmapStickerIcon;
 import com.xiaopo.flying.sticker.DeleteIconEvent;
 import com.xiaopo.flying.sticker.DrawableSticker;
@@ -240,7 +239,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
     @Override
     public void onResume() {
         super.onResume();
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".SavedEditDocumentActivity"));
+        ContextCompat.registerReceiver(DocumentEditorActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".SavedEditDocumentActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     @Override
@@ -670,7 +669,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
                     rl_watermark_color.setVisibility(View.GONE);
                     rl_watermark_opacity.setVisibility(View.GONE);
                     rl_watermark.setVisibility(View.GONE);
-                    WatermarkBuilder.create(getApplicationContext(), iv_editImg.getSource()).loadWatermarkText(new WatermarkText(et_watermark_txt.getText().toString()).setPositionX(2.0d).setPositionY(2.0d).setTextFont(watermarkFont).setTextColor(et_watermark_txt.getCurrentTextColor()).setTextAlpha(sb_watermark_opacity.getProgress()).setRotation(-30.0d).setTextSize(20.0d)).setTileMode(true).getWatermark().setToImageView(iv_editImg.getSource());
+                    WatermarkUtil.applyTiledText(getApplicationContext(), iv_editImg.getSource(), et_watermark_txt.getText().toString(), watermarkFont, et_watermark_txt.getCurrentTextColor(), sb_watermark_opacity.getProgress(), 20.0f, -30.0f);
                     hideSoftKeyboard(et_watermark_txt);
                     return;
                 }
@@ -1458,7 +1457,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
     }
 
     @Override
-    public void onBackPressed() {
+    protected void handleBack() {
         if (ly_color_filter.getVisibility() == View.VISIBLE) {
             Constant.filterPosition = 0;
             ly_edit_tools.setVisibility(View.VISIBLE);

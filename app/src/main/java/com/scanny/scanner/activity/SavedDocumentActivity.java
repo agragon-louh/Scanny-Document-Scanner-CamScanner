@@ -1,5 +1,6 @@
 package com.scanny.scanner.activity;
 
+import androidx.core.content.ContextCompat;
 import android.app.Dialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -60,8 +61,8 @@ public class SavedDocumentActivity extends BaseActivity implements View.OnClickL
     public void onResume() {
         super.onResume();
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".ScannerActivity_Retake2"));
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentEditorActivity_Saved"));
+        ContextCompat.registerReceiver(SavedDocumentActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".ScannerActivity_Retake2"), ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(SavedDocumentActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".DocumentEditorActivity_Saved"), ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     @Override

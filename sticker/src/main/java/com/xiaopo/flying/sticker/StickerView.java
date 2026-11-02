@@ -18,7 +18,6 @@ import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
-import androidx.core.view.MotionEventCompat;
 import androidx.core.view.ViewCompat;
 
 import java.io.File;
@@ -255,7 +254,7 @@ public class StickerView extends FrameLayout {
         if (this.locked) {
             return super.onTouchEvent(motionEvent);
         }
-        int actionMasked = MotionEventCompat.getActionMasked(motionEvent);
+        int actionMasked = motionEvent.getActionMasked();
         if (actionMasked != 0) {
             if (actionMasked == 1) {
                 onTouchUp(motionEvent);

@@ -1,25 +1,28 @@
 plugins {
     id 'com.android.application'
-    id 'com.onesignal.androidsdk.onesignal-gradle-plugin'
 }
-configurations.all {
-    resolutionStrategy { force 'androidx.core:core-ktx:1.6.0' }
-}
+
 android {
-    compileSdkVersion 33
-    buildToolsVersion "30.0.3"
+    namespace 'com.scanny.scanner'
+    // Android 17 (API 37). AGP >= 9.1.1 is required for API 37.
+    compileSdk 37
 
     defaultConfig {
         applicationId "com.templatemela.Scanny"
-        minSdkVersion 21
-        targetSdkVersion 33
-        versionCode 1
-        versionName "1.0"
+        // AndroidX, Play services ads 24.x and Material 1.13 require API 23+.
+        minSdk 23
+        targetSdk 37
+        versionCode 2
+        versionName "1.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
-            abiFilters 'armeabi-v7a', "arm64-v8a", 'x86', 'x86_64'
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
         }
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     buildTypes {
@@ -29,100 +32,84 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
-    sourceSets {
-        main {
-            assets {
-                srcDirs 'src\\main\\assets'
-            }
+
+    androidResources {
+        noCompress += ['tflite', 'lite']
+    }
+
+    packaging {
+        jniLibs {
+            // Required for 16 KB page-size compatibility: store .so files uncompressed and
+            // page-aligned in the APK. (Prebuilt .so files must ALSO be linked with 16 KB
+            // ELF alignment - see FABLE_REVIEW.md.)
+            useLegacyPackaging = false
         }
     }
 
-    aaptOptions {
-        noCompress "tflite"
-        noCompress "lite"
-    }
-
-    lintOptions {
+    lint {
         checkReleaseBuilds false
-        // Or, if you prefer, you can continue to check for errors in release builds,
-        // but continue the build even when errors are found:
         abortOnError false
     }
-
-
-    /* Reduce apk size */
-    /*splits {
-        abi {
-            enable true
-            reset()
-            include 'arm64-v8a', 'armeabi-v7a', 'mips', 'mips64', 'x86', 'x86_64'
-            universalApk false
-        }
-    }*/
-
 }
 
 dependencies {
-
-    implementation 'androidx.appcompat:appcompat:1.2.0'
-    implementation 'com.google.android.material:material:1.3.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
     implementation project(path: ':scanlibrary')
     implementation project(path: ':sticker')
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.3'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
 
-    implementation 'com.google.android.gms:play-services-ads:20.2.0'
-//    implementation group: 'com.itextpdf', name: 'itextpdf', version: '5.5.9'
-    implementation fileTree(dir: 'libs', include: '*.jar')
-    implementation files('libs/itextpdf-5.5.13.2.jar')
+    // AndroidX
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation 'androidx.activity:activity:1.10.1'
+    implementation 'androidx.core:core:1.16.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.1'
+    implementation 'androidx.recyclerview:recyclerview:1.4.0'
+    implementation 'androidx.drawerlayout:drawerlayout:1.2.0'
+    implementation 'androidx.annotation:annotation:1.9.1'
+    // Replaces the deprecated androidx.lifecycle:lifecycle-extensions (ProcessLifecycleOwner).
+    implementation 'androidx.lifecycle:lifecycle-process:2.8.7'
+    implementation 'com.google.android.material:material:1.13.0'
 
-    implementation group: 'cz.msebera.android', name: 'httpclient', version: '4.4.1.1'
-    implementation 'com.github.pqpo:SmartCropper:v2.1.3'
-    implementation 'com.github.chrisbanes:PhotoView:2.3.0'
-
-    implementation 'com.github.bumptech.glide:glide:4.12.0'
-    annotationProcessor 'com.github.bumptech.glide:compiler:4.12.0'
-
-    implementation 'com.divyanshu.colorseekbar:colorseekbar:1.0.2'
-
-    implementation 'androidx.annotation:annotation:1.0.0'
-    implementation 'com.github.QuadFlask:colorpicker:0.0.15'
-    implementation 'com.kyanogen.signatureview:signature-view:1.2'
-    implementation 'com.github.nguyenhoanglam:ImagePicker:1.4.3'
-    implementation 'com.takwolf.android:aspectratio:0.3.0'
-    implementation 'com.huangyz0918:androidwm-light:0.1.2'
-    implementation 'com.burhanrashid52:photoeditor:1.1.1'
-
+    // Google Play services
+    implementation 'com.google.android.gms:play-services-ads:24.4.0'
+    // Mobile Vision OCR is deprecated; migrate to ML Kit text recognition (see FABLE_REVIEW.md).
     implementation 'com.google.android.gms:play-services-vision:20.1.3'
 
-    implementation group: 'org.bouncycastle', name: 'bcprov-jdk15to18', version: '1.64'
-//Thanks for using https://jar-download.com
-    implementation 'jp.wasabeef:richeditor-android:2.0.0'
-//    implementation 'com.github.barteksc:android-pdf-viewer:3.2.0-beta.1'
-    implementation 'com.github.barteksc:android-pdf-viewer:2.8.2'
-    implementation 'com.google.zxing:core:3.3.3'
-    // https://mvnrepository.com/artifact/com.github.google/cameraview
-//    implementation group: 'com.github.google', name: 'cameraview', version: '6ceaf867d3'
+    // PDF generation. iText 5 is end-of-life and AGPL-licensed - see FABLE_REVIEW.md.
+    // Pulled from Maven Central (5.5.13.4) instead of the old checked-in 5.5.13.2 jar.
+    implementation 'com.itextpdf:itextpdf:5.5.13.4'
+    // Used by iText for PDF encryption. 1.64 had several CVEs (CVE-2020-15522, CVE-2023-33201,
+    // CVE-2024-29857, CVE-2024-30171, ...).
+    implementation 'org.bouncycastle:bcprov-jdk15to18:1.78.1'
 
-    api 'com.otaliastudios:cameraview:2.7.1'
-
-    implementation 'com.github.yalantis:ucrop:2.2.6'
-    implementation 'com.edmodo:cropper:1.0.1'
-    implementation 'com.loopj.android:android-async-http:1.4.9'
-    implementation 'com.intuit.sdp:sdp-android:1.0.6'
+    implementation 'com.google.zxing:core:3.5.3'
+    implementation 'com.github.bumptech.glide:glide:4.16.0'
+    annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
+    implementation 'com.otaliastudios:cameraview:2.7.2'
+    implementation 'com.airbnb.android:lottie:6.6.7'
+    implementation 'com.onesignal:OneSignal:5.1.38'
+    implementation 'com.intuit.sdp:sdp-android:1.1.1'
     implementation 'com.makeramen:roundedimageview:2.3.0'
-    implementation 'com.onesignal:OneSignal:4.4.0'
-    def lottieVersion = "3.4.0"
-    implementation "com.airbnb.android:lottie:$lottieVersion"
+    implementation 'com.edmodo:cropper:1.0.1'
+    implementation 'com.burhanrashid52:photoeditor:1.1.1'
+    implementation 'jp.wasabeef:richeditor-android:2.0.0'
 
-    implementation 'com.infideap.drawerbehavior:drawer-behavior:1.0.4'
+    // JitPack-only artifacts (repository is restricted to these groups in settings.gradle)
+    implementation 'com.github.pqpo:SmartCropper:v2.1.3'
+    implementation 'com.github.chrisbanes:PhotoView:2.3.0'
+    implementation 'com.github.QuadFlask:colorpicker:0.0.15'
+    implementation 'com.github.yalantis:ucrop:2.2.10'
 
-    implementation 'androidx.lifecycle:lifecycle-extensions:2.2.0'
+    // Removed (unused, unmaintained HTTP stacks): cz.msebera.android:httpclient,
+    // com.loopj.android:android-async-http.
+    // Removed (JCenter-only, no longer downloadable) and replaced by local code:
+    // colorseekbar, signature-view, aspectratio, androidwm-light, drawer-behavior,
+    // android-pdf-viewer, nguyenhoanglam ImagePicker.
 
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
 }

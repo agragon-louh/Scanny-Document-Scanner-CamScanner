@@ -1,5 +1,6 @@
 package com.scanny.scanner.activity;
 
+import androidx.core.content.ContextCompat;
 import android.app.ProgressDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -64,8 +65,8 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
     public void onResume() {
         super.onResume();
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".SavedDocumentActivity"));
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".IDCardPreviewActivity2"));
+        ContextCompat.registerReceiver(CurrentFilterActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".SavedDocumentActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
+        ContextCompat.registerReceiver(CurrentFilterActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".IDCardPreviewActivity2"), ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     @Override

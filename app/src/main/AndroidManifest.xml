@@ -1,14 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.scanny.scanner">
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- package/namespace is set in app/build.gradle (required by AGP 8+). -->
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <!--
+        Storage permissions are scoped to the Android versions that still honour them.
+        Gallery import uses the system photo picker (no permission needed) and exports are
+        written to Download/Scanny, which needs no permission from Android 10/11 on.
+        tools:replace overrides the unbounded declarations coming from :scanlibrary.
+    -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"
+        tools:replace="android:maxSdkVersion" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"
+        tools:replace="android:maxSdkVersion" />
 
     <uses-feature
         android:name="android.hardware.camera"
@@ -17,15 +28,16 @@
         android:name="android.hardware.camera.autofocus"
         android:required="false" />
 
-
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
-    <uses-permission android:name="com.android.vending.BILLING" />
+    <!--
+        Removed: ACCESS_WIFI_STATE, WAKE_LOCK, RECEIVE_BOOT_COMPLETED and com.android.vending.BILLING.
+        The app has no billing or boot code; SDKs that need WAKE_LOCK etc. (OneSignal, Ads)
+        declare them in their own manifests.
+    -->
 
     <application
         android:name="com.scanny.scanner.MyApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -35,7 +47,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Scanny"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="false"
+        tools:replace="android:allowBackup">
 
 
         <provider
@@ -50,9 +63,12 @@
                 tools:replace="android:resource" />
         </provider>
 
-        <activity android:name="com.scanny.scanner.activity.BaseActivity" />
+        <activity
+            android:name="com.scanny.scanner.activity.BaseActivity"
+            android:exported="false" />
         <activity
             android:name="com.scanny.scanner.activity.SplashActivity"
+            android:exported="true"
             android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -60,57 +76,74 @@
             </intent-filter>
         </activity>
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.MainActivity"
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustPan" />
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.ScannerActivity"
             android:screenOrientation="portrait" />
         <activity
+            android:exported="false"
             android:name="com.yalantis.ucrop.UCropActivity"
             android:screenOrientation="portrait"
             android:theme="@style/uCropStyle" />
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.IDCardPreviewActivity"
             android:screenOrientation="portrait" />
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.CropDocumentActivity"
             android:screenOrientation="portrait" />
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.CurrentFilterActivity"
             android:screenOrientation="portrait" />
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.SavedDocumentActivity"
             android:screenOrientation="portrait" />
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.DocumentEditorActivity"
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustNothing" />
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.SavedEditDocumentActivity"
             android:screenOrientation="portrait" />
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.SavedDocumentPreviewActivity"
             android:screenOrientation="portrait" />
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.NoteActivity"
             android:screenOrientation="portrait" />
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.ImageToTextActivity"
             android:screenOrientation="portrait" />
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.GroupDocumentActivity"
             android:screenOrientation="portrait" />
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.PDFViewerActivity"
             android:screenOrientation="portrait" />
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.QRGenerateActivity"
             android:screenOrientation="portrait" />
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.QRReaderActivity"
             android:screenOrientation="portrait" />
         <activity
+            android:exported="false"
             android:name="com.scanny.scanner.activity.PrivacyPolicyActivity"
             android:screenOrientation="portrait" />
 

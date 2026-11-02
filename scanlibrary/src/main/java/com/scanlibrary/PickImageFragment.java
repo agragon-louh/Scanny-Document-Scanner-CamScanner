@@ -112,7 +112,7 @@ public class PickImageFragment extends Fragment {
             Log.d("", "openCamera: isDirectoryCreated: " + isDirectoryCreated);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 Uri tempFileUri = FileProvider.getUriForFile(getActivity().getApplicationContext(),
-                        "com.scanlibrary.provider", // As defined in Manifest
+                        getActivity().getPackageName() + ".provider", // app FileProvider (see app provider_paths.xml)
                         file);
                 cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, tempFileUri);
             } else {

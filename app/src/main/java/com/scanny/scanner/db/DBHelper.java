@@ -27,6 +27,50 @@ public class DBHelper extends SQLiteOpenHelper {
     private static final String TABLE_NAME = "alldocs";
     private static final String TAG = "DBHelper";
 
+    /**
+     * Group (folder) names are user supplied and every group gets its own SQLite table.
+     * Identifiers cannot be bound as query parameters, so they must be quoted and escaped
+     * here instead of being concatenated into SQL (previously allowed SQL injection, e.g.
+     * a folder called {@code x; DROP TABLE alldocs} or a name containing a quote).
+     */
+    public static String tableName(String groupName) {
+        return groupName == null ? "" : groupName.replace(" ", "");
+    }
+
+    private static String quoteIdentifier(String groupName) {
+        return "\"" + tableName(groupName).replace("\"", "\"\"") + "\"";
+    }
+
+    /**
+     * Returns true when {@code name} can safely be used as a group/folder name: it becomes a
+     * table name and part of exported PDF file names, so reserved table names, path
+     * separators and control characters are rejected.
+     */
+    public static boolean isValidGroupName(String name) {
+        if (name == null) {
+            return false;
+        }
+        String table = tableName(name.trim());
+        if (table.isEmpty() || table.length() > 100) {
+            return false;
+        }
+        if (table.equalsIgnoreCase(TABLE_NAME) || table.toLowerCase(java.util.Locale.ROOT).startsWith("sqlite_")
+                || table.toLowerCase(java.util.Locale.ROOT).startsWith("android_metadata")) {
+            return false;
+        }
+        if (name.contains("..")) {
+            return false;
+        }
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (c < 0x20 || c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"'
+                    || c == '<' || c == '>' || c == '|' || c == '\'') {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public DBHelper(Context context) {
         super(context, DATABASE_NAME, (SQLiteDatabase.CursorFactory) null, 1);
     }
@@ -44,7 +88,7 @@ public class DBHelper extends SQLiteOpenHelper {
 
     public void createDocTable(String str) {
         SQLiteDatabase writableDatabase = getWritableDatabase();
-        writableDatabase.execSQL("CREATE TABLE '" + str + "'(" + KEY_ID + " INTEGER PRIMARY KEY," + KEY_IMG_NAME + " TEXT," + KEY_IMG_NOTE + " TEXT," + KEY_IMG_PATH + " TEXT)");
+        writableDatabase.execSQL("CREATE TABLE IF NOT EXISTS " + quoteIdentifier(str) + "(" + KEY_ID + " INTEGER PRIMARY KEY," + KEY_IMG_NAME + " TEXT," + KEY_IMG_NOTE + " TEXT," + KEY_IMG_PATH + " TEXT)");
     }
 
     public void addGroup(DBModel dBModel) {
@@ -64,7 +108,7 @@ public class DBHelper extends SQLiteOpenHelper {
         contentValues.put(KEY_IMG_PATH, path);
         contentValues.put(KEY_IMG_NAME, img_name);
         contentValues.put(KEY_IMG_NOTE, note);
-        writableDatabase.insert(name.replace(" ", ""), null, contentValues);
+        writableDatabase.insert(quoteIdentifier(name), null, contentValues);
         writableDatabase.close();
     }
 
@@ -74,7 +118,7 @@ public class DBHelper extends SQLiteOpenHelper {
         contentValues.put(KEY_IMG_PATH, path);
         contentValues.put(KEY_IMG_NAME, img_name);
         contentValues.put(KEY_IMG_NOTE, note);
-        long value = writableDatabase.insert(name.replace(" ", ""), null, contentValues);
+        long value = writableDatabase.insert(quoteIdentifier(name), null, contentValues);
         writableDatabase.close();
         return value;
     }
@@ -93,6 +137,7 @@ public class DBHelper extends SQLiteOpenHelper {
                 arrayList.add(dBModel);
             } while (rawQuery.moveToNext());
         }
+        rawQuery.close();
         return arrayList;
     }
 
@@ -110,6 +155,7 @@ public class DBHelper extends SQLiteOpenHelper {
                 if (dBModel.getGroup_first_img().isEmpty()) arrayList.add(dBModel);
             } while (rawQuery.moveToNext());
         }
+        rawQuery.close();
         return arrayList;
     }
 
@@ -127,14 +173,14 @@ public class DBHelper extends SQLiteOpenHelper {
                 arrayList.add(dBModel);
             } while (rawQuery.moveToNext());
         }
+        rawQuery.close();
         return arrayList;
     }
 
     public ArrayList<DBModel> getGroupDocs(String str) {
         ArrayList<DBModel> arrayList = new ArrayList<>();
-        String str2 = "SELECT  * FROM " + str;
+        String str2 = "SELECT  * FROM " + quoteIdentifier(str);
         SQLiteDatabase readableDatabase = getReadableDatabase();
-        Log.e(TAG, str2);
         Cursor rawQuery = readableDatabase.rawQuery(str2, (String[]) null);
         if (rawQuery.moveToFirst()) {
             do {
@@ -146,14 +192,14 @@ public class DBHelper extends SQLiteOpenHelper {
                 arrayList.add(dBModel);
             } while (rawQuery.moveToNext());
         }
+        rawQuery.close();
         return arrayList;
     }
 
     public ArrayList<DBModel> getShareGroupDocs(String groupName) {
         ArrayList<DBModel> arrayList = new ArrayList<>();
-        String str2 = "SELECT  * FROM " + groupName;
+        String str2 = "SELECT  * FROM " + quoteIdentifier(groupName);
         SQLiteDatabase readableDatabase = getReadableDatabase();
-        Log.e(TAG, str2);
         Cursor rawQuery = readableDatabase.rawQuery(str2, (String[]) null);
         if (rawQuery.moveToFirst()) {
             do {
@@ -165,38 +211,42 @@ public class DBHelper extends SQLiteOpenHelper {
                 if (dBModel.getGroup_doc_name() != null) arrayList.add(dBModel);
             } while (rawQuery.moveToNext());
         }
+        rawQuery.close();
         return arrayList;
     }
 
 
     public String getSingleNote(String str, String str2) {
-        Cursor rawQuery = getReadableDatabase().rawQuery("SELECT  * FROM " + str.replace(" ", "") + " WHERE " + KEY_IMG_NAME + " = '" + str2 + "'", (String[]) null);
+        Cursor rawQuery = getReadableDatabase().rawQuery("SELECT  * FROM " + quoteIdentifier(str) + " WHERE " + KEY_IMG_NAME + " = ?", new String[]{str2});
         if (rawQuery == null) {
             return "";
         }
-        rawQuery.moveToFirst();
-        String string = rawQuery.getString(2);
-        rawQuery.close();
-        return string;
+        try {
+            if (!rawQuery.moveToFirst()) {
+                return "";
+            }
+            return rawQuery.getString(2);
+        } finally {
+            rawQuery.close();
+        }
     }
 
     public void deleteGroup(String str) {
         SQLiteDatabase writableDatabase = getWritableDatabase();
         writableDatabase.delete(TABLE_NAME, "name = ?", new String[]{String.valueOf(str)});
-        writableDatabase.execSQL("DROP TABLE IF EXISTS '" + str.replace(" ", "") + "'");
+        writableDatabase.execSQL("DROP TABLE IF EXISTS " + quoteIdentifier(str));
         writableDatabase.close();
     }
 
     public void deleteSingleDoc(String str, String str2) {
         SQLiteDatabase writableDatabase = getWritableDatabase();
-        writableDatabase.delete(str.replace(" ", ""), "imgname = ?", new String[]{String.valueOf(str2)});
+        writableDatabase.delete(quoteIdentifier(str), "imgname = ?", new String[]{String.valueOf(str2)});
         writableDatabase.close();
     }
 
     private boolean isGroupNameExist(Activity activity, String str) {
         Cursor rawQuery = getReadableDatabase().rawQuery("SELECT * FROM alldocs WHERE name = ?", new String[]{str});
         int count = rawQuery.getCount();
-        Log.e(TAG, "isGroupNameExist: " + count);
         if (count > 0) {
             Toast.makeText(activity, "Document Name Already Exist", Toast.LENGTH_SHORT).show();
         }
@@ -208,12 +258,16 @@ public class DBHelper extends SQLiteOpenHelper {
     }
 
     public void updateGroupName(Activity activity, String str, String str2) {
+        if (!isValidGroupName(str2)) {
+            Toast.makeText(activity, "Invalid document name", Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (!isGroupNameExist(activity, str2)) {
             SQLiteDatabase writableDatabase = getWritableDatabase();
             ContentValues contentValues = new ContentValues();
             contentValues.put("name", str2);
             writableDatabase.update(TABLE_NAME, contentValues, "name = ?", new String[]{String.valueOf(str)});
-            writableDatabase.execSQL("ALTER TABLE " + str.replace(" ", "") + " RENAME TO " + str2.replace(" ", ""));
+            writableDatabase.execSQL("ALTER TABLE " + quoteIdentifier(str) + " RENAME TO " + quoteIdentifier(str2));
             writableDatabase.close();
         }
     }
@@ -230,7 +284,7 @@ public class DBHelper extends SQLiteOpenHelper {
         SQLiteDatabase writableDatabase = getWritableDatabase();
         ContentValues contentValues = new ContentValues();
         contentValues.put(KEY_IMG_PATH, str3);
-        writableDatabase.update(str.replace(" ", ""), contentValues, "imgname = ?", new String[]{String.valueOf(str2)});
+        writableDatabase.update(quoteIdentifier(str), contentValues, "imgname = ?", new String[]{String.valueOf(str2)});
         writableDatabase.close();
     }
 
@@ -238,7 +292,7 @@ public class DBHelper extends SQLiteOpenHelper {
         SQLiteDatabase writableDatabase = getWritableDatabase();
         ContentValues contentValues = new ContentValues();
         contentValues.put(KEY_IMG_NOTE, str3);
-        writableDatabase.update(str.replace(" ", ""), contentValues, "imgname = ?", new String[]{String.valueOf(str2)});
+        writableDatabase.update(quoteIdentifier(str), contentValues, "imgname = ?", new String[]{String.valueOf(str2)});
         writableDatabase.close();
     }
 }

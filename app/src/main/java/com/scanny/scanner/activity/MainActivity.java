@@ -48,6 +48,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.GravityCompat;
+import androidx.core.graphics.ColorUtils;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -59,10 +60,9 @@ import com.bumptech.glide.request.transition.Transition;
 import com.google.android.gms.ads.nativead.NativeAdView;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.tabs.TabLayout;
-import com.infideap.drawerbehavior.Advance3DDrawerLayout;
 import com.itextpdf.text.pdf.PdfObject;
-import com.nguyenhoanglam.imagepicker.model.Image;
-import com.nguyenhoanglam.imagepicker.ui.imagepicker.ImagePicker;
+import com.scanny.scanner.picker.Image;
+import com.scanny.scanner.picker.ImagePicker;
 import com.scanny.scanner.R;
 import com.scanny.scanner.adapter.AllGroupAdapter;
 import com.scanny.scanner.adapter.DrawerItemAdapter;
@@ -72,6 +72,7 @@ import com.scanny.scanner.models.DBModel;
 import com.scanny.scanner.models.DrawerModel;
 import com.scanny.scanner.utils.AdmobAds;
 import com.scanny.scanner.utils.AdsUtils;
+import com.scanny.scanner.utils.PermissionUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -153,7 +154,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
     ArrayList<DBModel> modelArrayList = new ArrayList<>();
     String selectedFolderName = "";
     private ArrayList<DrawerModel> drawerList = new ArrayList<>();
-    private Advance3DDrawerLayout drawer_ly;
+    private DrawerLayout drawer_ly;
     private EditText et_search;
     private ListView lv_drawer;
     private RelativeLayout rl_search_bar;
@@ -174,19 +175,19 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         new setAllGroupAdapter().execute(new String[0]);
         super.onResume();
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".PrivacyPolicyActivity"));
+        ContextCompat.registerReceiver(MainActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".PrivacyPolicyActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".QRGenerateActivity"));
+        ContextCompat.registerReceiver(MainActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".QRGenerateActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".QRReaderActivity"));
+        ContextCompat.registerReceiver(MainActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".QRReaderActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".MainGalleryActivity"));
+        ContextCompat.registerReceiver(MainActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".MainGalleryActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".ScannerActivity"));
+        ContextCompat.registerReceiver(MainActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".ScannerActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".GroupDocumentActivity"));
+        ContextCompat.registerReceiver(MainActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".GroupDocumentActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
 
-        registerReceiver(broadcastReceiver, new IntentFilter(getPackageName() + ".CropDocumentActivity"));
+        ContextCompat.registerReceiver(MainActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".CropDocumentActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     @Override
@@ -216,15 +217,12 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         dbHelper = new DBHelper(this);
         preferences = getSharedPreferences("mypref", 0);
 
-        drawer_ly = (Advance3DDrawerLayout) findViewById(R.id.drawer_ly);
+        drawer_ly = (DrawerLayout) findViewById(R.id.drawer_ly);
 
-        drawer_ly.setViewScale(GravityCompat.START, 0.9f); //set height scale for main view (0f to 1f)
-        drawer_ly.setViewElevation(GravityCompat.START, 30); //set main view elevation when drawer open (dimension)
-        drawer_ly.setViewScrimColor(GravityCompat.START, ContextCompat.getColor(this, R.color.colorPrimary)); //set drawer overlay coloe (color)
-        drawer_ly.setDrawerElevation(30); //set drawer elevation (dimension)
-        //  binding.drawerLayout.setContrastThreshold(0); //set maximum of contrast ratio between white text and background color.
-        drawer_ly.setRadius(GravityCompat.START, 25);
-        drawer_ly.setViewRotation(GravityCompat.START, 0);
+        // Plain androidx DrawerLayout: the 3D drawer library (com.infideap.drawerbehavior)
+        // was only published on JCenter and can no longer be downloaded.
+        drawer_ly.setScrimColor(ColorUtils.setAlphaComponent(ContextCompat.getColor(this, R.color.colorPrimary), 0x99));
+        drawer_ly.setDrawerElevation(30);
         drawer_ly.closeDrawer(GravityCompat.START);
         drawer_ly.addDrawerListener(new DrawerLayout.SimpleDrawerListener() {
             @Override
@@ -357,12 +355,18 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                 drawer_ly.openDrawer(GravityCompat.START);
                 return;
             case R.id.iv_group_camera:
-                ActivityCompat.requestPermissions(this, new String[]{"android.permission.READ_EXTERNAL_STORAGE", "android.permission.WRITE_EXTERNAL_STORAGE", "android.permission.CAMERA"}, 2);
+                ActivityCompat.requestPermissions(this, PermissionUtils.storageAndCameraPermissions(), 2);
                 return;
             case R.id.iv_more:
                 PopupMenu popupMenu = new PopupMenu(this, view);
                 popupMenu.setOnMenuItemClickListener(this);
                 popupMenu.inflate(R.menu.group_more);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    // Public API since Android 10; the reflection below hits a non-SDK interface.
+                    popupMenu.setForceShowIcon(true);
+                    popupMenu.show();
+                    return;
+                }
                 try {
                     Field declaredField = PopupMenu.class.getDeclaredField("mPopup");
                     declaredField.setAccessible(true);
@@ -401,6 +405,10 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
             @Override
             public void onClick(View view) {
                 String finalFolderName = et_folder_name.getText().toString().trim();
+                if (!finalFolderName.isEmpty() && !DBHelper.isValidGroupName(finalFolderName)) {
+                    Toast.makeText(mainActivity, "Folder name contains invalid characters", Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 if (!finalFolderName.isEmpty()) {
                     String group_date = Constant.getDateTime("yyyy-MM-dd  hh:mm a");
                     if (groupName.isEmpty()) {        // for create new folder
@@ -445,39 +453,31 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
     }
 
     @Override
-    @RequiresApi(api = Build.VERSION_CODES.M)
     public void onRequestPermissionsResult(int i, String[] strArr, int[] iArr) {
         super.onRequestPermissionsResult(i, strArr, iArr);
-        if (i != 1) {
-            if (i != 2) {
-                if (i != 3) {
-                    if (i == 4) {
-                        if (checkSelfPermission("android.permission.READ_EXTERNAL_STORAGE") == PackageManager.PERMISSION_GRANTED && checkSelfPermission("android.permission.WRITE_EXTERNAL_STORAGE") == PackageManager.PERMISSION_GRANTED && checkSelfPermission("android.permission.CAMERA") == PackageManager.PERMISSION_GRANTED) {
-                            Constant.IdentifyActivity = "QRGenerateActivity";
-                            AdsUtils.showGoogleInterstitialAd(MainActivity.this, true);
-                            return;
-                        }
-                        ActivityCompat.requestPermissions(this, new String[]{"android.permission.READ_EXTERNAL_STORAGE", "android.permission.WRITE_EXTERNAL_STORAGE", "android.permission.CAMERA"}, 4);
-                    }
-                } else if (checkSelfPermission("android.permission.READ_EXTERNAL_STORAGE") == PackageManager.PERMISSION_GRANTED && checkSelfPermission("android.permission.WRITE_EXTERNAL_STORAGE") == PackageManager.PERMISSION_GRANTED && checkSelfPermission("android.permission.CAMERA") == PackageManager.PERMISSION_GRANTED) {
-                    Constant.IdentifyActivity = "QRReaderActivity";
-                    AdsUtils.showGoogleInterstitialAd(MainActivity.this, true);
-                } else {
-                    ActivityCompat.requestPermissions(this, new String[]{"android.permission.READ_EXTERNAL_STORAGE", "android.permission.WRITE_EXTERNAL_STORAGE", "android.permission.CAMERA"}, 3);
-                }
-            } else if (checkSelfPermission("android.permission.READ_EXTERNAL_STORAGE") == PackageManager.PERMISSION_GRANTED && checkSelfPermission("android.permission.WRITE_EXTERNAL_STORAGE") == PackageManager.PERMISSION_GRANTED && checkSelfPermission("android.permission.CAMERA") == PackageManager.PERMISSION_GRANTED) {
-                Constant.inputType = "Group";
-                Constant.IdentifyActivity = "ScannerActivity";
-                AdsUtils.showGoogleInterstitialAd(MainActivity.this, false);
-            } else {
-                ActivityCompat.requestPermissions(this, new String[]{"android.permission.READ_EXTERNAL_STORAGE", "android.permission.WRITE_EXTERNAL_STORAGE", "android.permission.CAMERA"}, 2);
-            }
-        } else if (checkSelfPermission("android.permission.READ_EXTERNAL_STORAGE") == PackageManager.PERMISSION_GRANTED && checkSelfPermission("android.permission.WRITE_EXTERNAL_STORAGE") == PackageManager.PERMISSION_GRANTED && checkSelfPermission("android.permission.CAMERA") == PackageManager.PERMISSION_GRANTED) {
+        if (i < 1 || i > 4) {
+            return;
+        }
+        if (!PermissionUtils.hasStorageAndCamera(this)) {
+            // Do not re-request here: once the user denies twice Android auto-denies,
+            // which previously produced an endless request loop.
+            Toast.makeText(this, "Camera permission is required for this feature", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (i == 1) {
             Constant.inputType = "Group";
             Constant.IdentifyActivity = "MainGalleryActivity";
             AdsUtils.showGoogleInterstitialAd(MainActivity.this, true);
+        } else if (i == 2) {
+            Constant.inputType = "Group";
+            Constant.IdentifyActivity = "ScannerActivity";
+            AdsUtils.showGoogleInterstitialAd(MainActivity.this, false);
+        } else if (i == 3) {
+            Constant.IdentifyActivity = "QRReaderActivity";
+            AdsUtils.showGoogleInterstitialAd(MainActivity.this, true);
         } else {
-            ActivityCompat.requestPermissions(this, new String[]{"android.permission.READ_EXTERNAL_STORAGE", "android.permission.WRITE_EXTERNAL_STORAGE", "android.permission.CAMERA"}, 1);
+            Constant.IdentifyActivity = "QRGenerateActivity";
+            AdsUtils.showGoogleInterstitialAd(MainActivity.this, true);
         }
     }
 
@@ -491,7 +491,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                 new setAllGroupAdapter().execute(new String[0]);
                 break;
             case R.id.import_from_gallery:
-                ActivityCompat.requestPermissions(this, new String[]{"android.permission.READ_EXTERNAL_STORAGE", "android.permission.WRITE_EXTERNAL_STORAGE", "android.permission.CAMERA"}, 1);
+                ActivityCompat.requestPermissions(this, PermissionUtils.storageAndCameraPermissions(), 1);
                 break;
             case R.id.list_view:
                 editor = preferences.edit();
@@ -1023,7 +1023,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         ((TextView) dialog.findViewById(R.id.tv_done)).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if (editText.getText().toString().equals("") || Character.isDigit(editText.getText().toString().charAt(0))) {
+                if (editText.getText().toString().trim().equals("") || Character.isDigit(editText.getText().toString().trim().charAt(0)) || !DBHelper.isValidGroupName(editText.getText().toString().trim())) {
                     Toast.makeText(MainActivity.this, "Please Enter Valid Document Name!", Toast.LENGTH_SHORT).show();
                     return;
                 }
@@ -1084,12 +1084,12 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
             if (drawer_ly.isDrawerOpen(GravityCompat.START)) {
                 drawer_ly.closeDrawer(GravityCompat.START);
             }
-            ActivityCompat.requestPermissions(this, new String[]{"android.permission.READ_EXTERNAL_STORAGE", "android.permission.WRITE_EXTERNAL_STORAGE", "android.permission.CAMERA"}, 3);
+            ActivityCompat.requestPermissions(this, PermissionUtils.storageAndCameraPermissions(), 3);
         } else if (i == 2) {
             if (drawer_ly.isDrawerOpen(GravityCompat.START)) {
                 drawer_ly.closeDrawer(GravityCompat.START);
             }
-            ActivityCompat.requestPermissions(this, new String[]{"android.permission.READ_EXTERNAL_STORAGE", "android.permission.WRITE_EXTERNAL_STORAGE", "android.permission.CAMERA"}, 4);
+            ActivityCompat.requestPermissions(this, PermissionUtils.storageAndCameraPermissions(), 4);
         } else if (i == 3) {
             if (drawer_ly.isDrawerOpen(GravityCompat.START)) {
                 drawer_ly.closeDrawer(GravityCompat.START);
@@ -1115,7 +1115,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
     }
 
     @Override
-    public void onBackPressed() {
+    protected void handleBack() {
         if (drawer_ly.isDrawerOpen(GravityCompat.START)) {
             drawer_ly.closeDrawer(GravityCompat.START);
         } else if (rl_search_bar.getVisibility() == View.VISIBLE) {
