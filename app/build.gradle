@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId "com.templatemela.Scanny"
-        // AndroidX, Play services ads 24.x and Material 1.13 require API 23+.
+        // AndroidX and Material 1.13 require API 23+.
         minSdk 23
         targetSdk 37
         versionCode 2
@@ -72,12 +72,9 @@ dependencies {
     implementation 'androidx.recyclerview:recyclerview:1.4.0'
     implementation 'androidx.drawerlayout:drawerlayout:1.2.0'
     implementation 'androidx.annotation:annotation:1.9.1'
-    // Replaces the deprecated androidx.lifecycle:lifecycle-extensions (ProcessLifecycleOwner).
-    implementation 'androidx.lifecycle:lifecycle-process:2.8.7'
     implementation 'com.google.android.material:material:1.13.0'
 
     // Google Play services
-    implementation 'com.google.android.gms:play-services-ads:24.4.0'
     // Mobile Vision OCR is deprecated; migrate to ML Kit text recognition (see FABLE_REVIEW.md).
     implementation 'com.google.android.gms:play-services-vision:20.1.3'
 

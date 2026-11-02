@@ -13,12 +13,12 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.util.Log;
 import android.view.View;
+import android.widget.Toast;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
-import com.google.android.gms.ads.AdView;
 import com.scanlibrary.ScanActivity;
 import com.scanny.scanner.R;
 import com.scanny.scanner.db.DBHelper;
@@ -26,7 +26,7 @@ import com.scanny.scanner.main_utils.AdjustUtil;
 import com.scanny.scanner.main_utils.BitmapUtils;
 import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.DBModel;
-import com.scanny.scanner.utils.AdsUtils;
+import com.scanny.scanner.utils.NavigationUtils;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -56,6 +56,7 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
                 intent2.putExtra("TAG", "SavedDocumentActivity");
                 intent2.putExtra("scan_doc_group_name", selected_group_name);
                 intent2.putExtra("current_doc_name", current_docs_name);
+                intent2.putExtra("is_new_group", Constant.inputType.equals("Group"));
                 startActivity(intent2);
                 Constant.IdentifyActivity = "";
                 finish();
@@ -71,7 +72,6 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
         }
     };
     private CropImageView iv_preview_crop;
-    private AdView adView;
     private TextView iv_ocv_black;
     private TextView iv_original;
     private TextView iv_color;
@@ -112,7 +112,6 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
     }
 
     private void init() {
-        adView = findViewById(R.id.adView);
         iv_add_new_scan = (ImageView) findViewById(R.id.iv_add_new_scan);
         seekBarBrightness = (SeekBar) findViewById(R.id.seekBarBrightness);
 
@@ -136,8 +135,6 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
             original = Constant.original;
             changeBrightness(20);
         }
-        AdsUtils.loadGoogleInterstitialAd(this, CropDocumentActivity.this);
-        AdsUtils.showGoogleBannerAd(this, adView);
 
 
         seekBarBrightness.setOnSeekBarChangeListener(this);
@@ -317,7 +314,7 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
                 /*if (iv_preview_crop.canRightCrop()) {
                     Constant.original = iv_preview_crop.crop();
                     Constant.IdentifyActivity = "CurrentFilterActivity";
-                    AdsUtils.showGoogleInterstitialAd(CropDocumentActivity.this, true);
+                    NavigationUtils.jumpNextActivity(CropDocumentActivity.this);
                     return;
                 }*/
                 return;
@@ -333,13 +330,13 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
                 return;
             case R.id.iv_retake:
                 Constant.IdentifyActivity = "ScannerActivity_Retake";
-                AdsUtils.showGoogleInterstitialAd(CropDocumentActivity.this, true);
+                NavigationUtils.jumpNextActivity(CropDocumentActivity.this);
                 return;
             case R.id.ly_current_filter:
                 if (iv_preview_crop.canRightCrop()) {
                     Constant.original = iv_preview_crop.crop();
                     Constant.IdentifyActivity = "CurrentFilterActivity";
-                    AdsUtils.showGoogleInterstitialAd(CropDocumentActivity.this, true);
+                    NavigationUtils.jumpNextActivity(CropDocumentActivity.this);
                     return;
                 }
                 return;
@@ -398,6 +395,7 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
     }
 
     private class addGroup extends AsyncTask<Bitmap, Void, Bitmap> {
+        boolean saveFailed;
         String current_doc_name;
         String group_date;
         String group_name;
@@ -424,25 +422,21 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
                 return null;
             }
             byte[] bytes = BitmapUtils.getBytes(bitmap);
-            File externalFilesDir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-            File file = new File(externalFilesDir, System.currentTimeMillis() + ".jpg");
-            try {
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                fileOutputStream.write(bytes);
-                fileOutputStream.close();
-            } catch (IOException e) {
-                e.printStackTrace();
+            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            if (file == null) {
+                saveFailed = true;
+                return null;
             }
             if (Constant.inputType.equals("Group")) {
                 group_name = "Scanny" + Constant.getDateTime("_ddMMHHmmss");
                 group_date = Constant.getDateTime("yyyy-MM-dd  hh:mm a");
-                current_doc_name = "Doc_" + System.currentTimeMillis();
+                current_doc_name = Constant.newDocName();
                 group_name = dbHelper.createGroup(new DBModel(group_name, group_date, file.getPath(), Constant.current_tag));
                 dbHelper.addGroupDoc(group_name, file.getPath(), current_doc_name, "Insert text here...");
                 return null;
             }
             group_name = GroupDocumentActivity.current_group;
-            current_doc_name = "Doc_" + System.currentTimeMillis();
+            current_doc_name = Constant.newDocName();
             dbHelper.addGroupDoc(group_name, file.getPath(), current_doc_name, "Insert text here...");
             return null;
         }
@@ -451,14 +445,19 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
         public void onPostExecute(Bitmap bitmap) {
             super.onPostExecute(bitmap);
             progressDialog.dismiss();
+            if (saveFailed) {
+                Toast.makeText(CropDocumentActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
+                return;
+            }
             selected_group_name = group_name;
             current_docs_name = current_doc_name;
             Constant.IdentifyActivity = "DocumentEditorActivity_Crop";
-            AdsUtils.showGoogleInterstitialAd(CropDocumentActivity.this, true);
+            NavigationUtils.jumpNextActivity(CropDocumentActivity.this);
         }
     }
 
     private class addDocGroup extends AsyncTask<Bitmap, Void, Bitmap> {
+        boolean saveFailed;
         String current_doc_name;
         String group_date;
         String group_name;
@@ -485,25 +484,21 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
                 return null;
             }
             byte[] bytes = BitmapUtils.getBytes(bitmap);
-            File externalFilesDir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-            File file = new File(externalFilesDir, System.currentTimeMillis() + ".jpg");
-            try {
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                fileOutputStream.write(bytes);
-                fileOutputStream.close();
-            } catch (IOException e) {
-                e.printStackTrace();
+            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            if (file == null) {
+                saveFailed = true;
+                return null;
             }
             if (Constant.inputType.equals("Group")) {
                 group_name = "Scanny" + Constant.getDateTime("_ddMMHHmmss");
                 group_date = Constant.getDateTime("yyyy-MM-dd  hh:mm a");
-                current_doc_name = "Doc_" + System.currentTimeMillis();
+                current_doc_name = Constant.newDocName();
                 group_name = dbHelper.createGroup(new DBModel(group_name, group_date, file.getPath(), Constant.current_tag));
                 dbHelper.addGroupDoc(group_name, file.getPath(), current_doc_name, "Insert text here...");
                 return null;
             }
             group_name = GroupDocumentActivity.current_group;
-            current_doc_name = "Doc_" + System.currentTimeMillis();
+            current_doc_name = Constant.newDocName();
             dbHelper.addGroupDoc(group_name, file.getPath(), current_doc_name, "Insert text here...");
             return null;
         }
@@ -512,6 +507,10 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
         public void onPostExecute(Bitmap bitmap) {
             super.onPostExecute(bitmap);
             progressDialog.dismiss();
+            if (saveFailed) {
+                Toast.makeText(CropDocumentActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
+                return;
+            }
             selected_group_name = group_name;
             current_docs_name = current_doc_name;
 

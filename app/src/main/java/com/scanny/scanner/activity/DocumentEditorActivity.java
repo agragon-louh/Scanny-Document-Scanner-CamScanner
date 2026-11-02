@@ -48,7 +48,6 @@ import com.flask.colorpicker.ColorPickerView;
 import com.flask.colorpicker.OnColorSelectedListener;
 import com.flask.colorpicker.builder.ColorPickerClickListener;
 import com.flask.colorpicker.builder.ColorPickerDialogBuilder;
-import com.google.android.gms.ads.nativead.NativeAdView;
 import com.itextpdf.text.html.HtmlTags;
 import com.scanny.scanner.widget.SignatureView;
 import com.scanny.scanner.picker.Image;
@@ -67,8 +66,7 @@ import com.scanny.scanner.main_utils.AdjustUtil;
 import com.scanny.scanner.main_utils.BitmapUtils;
 import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.EditToolType;
-import com.scanny.scanner.utils.AdmobAds;
-import com.scanny.scanner.utils.AdsUtils;
+import com.scanny.scanner.utils.NavigationUtils;
 import com.scanny.scanner.widget.WatermarkUtil;
 import com.xiaopo.flying.sticker.BitmapStickerIcon;
 import com.xiaopo.flying.sticker.DeleteIconEvent;
@@ -103,6 +101,12 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
     public String edited_doc_grp_name;
     public EditText et_watermark_txt;
     public String fromTAG;
+    /**
+     * True when this scan created a new folder (rather than adding a page to an existing one).
+     * Read from the intent: the static Constant.inputType resets to "Group" after process death,
+     * which made saving an edited page overwrite an existing folder's cover.
+     */
+    private boolean isNewGroup;
     public ImageView iv_done;
     public ImageView iv_erase;
     public ImageView iv_highlight;
@@ -172,6 +176,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
                 intent2.putExtra("edit_doc_group_name", selected_group_name);
                 intent2.putExtra("current_doc_name", current_doc_name);
                 intent2.putExtra("from", DocumentEditorActivity.TAG);
+                intent2.putExtra("is_new_group", isNewGroup);
                 startActivity(intent2);
                 Constant.IdentifyActivity = "";
                 finish();
@@ -264,7 +269,6 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
         init();
         bindView();
 
-        AdsUtils.loadGoogleInterstitialAd(this, DocumentEditorActivity.this);
     }
 
     private void init() {
@@ -385,6 +389,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
         edited_doc_grp_name = getIntent().getStringExtra("edited_doc_grp_name");
         current_doc_name = getIntent().getStringExtra("current_doc_name");
         position = getIntent().getIntExtra("position", -1);
+        isNewGroup = getIntent().getBooleanExtra("is_new_group", Constant.inputType.equals("Group"));
         photoEditor = new PhotoEditor.Builder(this, iv_editImg).setPinchTextScalable(true).build();
         iv_editImg.getSource().setImageBitmap(Constant.original);
         setEditToolsAdapter();
@@ -1023,11 +1028,6 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
         dialog.getWindow().setLayout(-1, -2);
         dialog.setCanceledOnTouchOutside(false);
         dialog.setCancelable(false);
-        if (AdmobAds.SHOW_ADS) {
-            AdmobAds.loadNativeAds(DocumentEditorActivity.this, (View) null, (ViewGroup) dialog.findViewById(R.id.admob_native_container), (NativeAdView) dialog.findViewById(R.id.native_ad_view));
-        } else {
-            dialog.findViewById(R.id.admob_native_container).setVisibility(View.GONE);
-        }
         final EditText editText = (EditText) dialog.findViewById(R.id.et_input_txt);
         TextView textView = (TextView) dialog.findViewById(R.id.tv_cancel);
         TextView textView2 = (TextView) dialog.findViewById(R.id.tv_done);
@@ -1622,6 +1622,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
     }
 
     private class saveFinalBitmap extends AsyncTask<Bitmap, Void, Bitmap> {
+        boolean saveFailed;
         String group_name;
         ProgressDialog progressDialog;
 
@@ -1646,18 +1647,14 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
                 return null;
             }
             byte[] bytes = BitmapUtils.getBytes(Constant.original);
-            File externalFilesDir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-            File file = new File(externalFilesDir, System.currentTimeMillis() + ".jpg");
-            try {
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                fileOutputStream.write(bytes);
-                fileOutputStream.close();
-            } catch (IOException e) {
-                Log.w(DocumentEditorActivity.TAG, "Cannot write to " + file, e);
+            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            if (file == null) {
+                saveFailed = true;
+                return null;
             }
             if (fromTAG.equals("SavedDocumentActivity")) {
                 group_name = scan_doc_grp_name;
-                if (Constant.inputType.equals("Group")) {
+                if (isNewGroup) {
                     dbHelper.updateGroupFirstImg(scan_doc_grp_name, file.getPath());
                     dbHelper.updateGroupListDoc(scan_doc_grp_name, current_doc_name, file.getPath());
                     return null;
@@ -1668,7 +1665,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
                 return null;
             } else {
                 group_name = edited_doc_grp_name;
-                if (Constant.inputType.equals("Group")) {
+                if (isNewGroup) {
                     dbHelper.updateGroupFirstImg(edited_doc_grp_name, file.getPath());
                     dbHelper.updateGroupListDoc(edited_doc_grp_name, current_doc_name, file.getPath());
                     return null;
@@ -1687,6 +1684,10 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
         public void onPostExecute(Bitmap bitmap) {
             super.onPostExecute(bitmap);
             progressDialog.dismiss();
+            if (saveFailed) {
+                Toast.makeText(DocumentEditorActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
+                return;
+            }
             if (fromTAG.equals("IDCardPreviewActivity")) {
                 setResult(-1, getIntent());
                 finish();
@@ -1699,7 +1700,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
                 }
                 selected_group_name = group_name;
                 Constant.IdentifyActivity = "SavedEditDocumentActivity";
-                AdsUtils.showGoogleInterstitialAd(DocumentEditorActivity.this, false);
+                NavigationUtils.jumpNextActivity(DocumentEditorActivity.this);
             }
         }
     }

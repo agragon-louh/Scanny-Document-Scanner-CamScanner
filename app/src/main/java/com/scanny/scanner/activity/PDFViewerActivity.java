@@ -16,9 +16,8 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.gms.ads.AdView;
 import com.scanny.scanner.R;
-import com.scanny.scanner.utils.AdsUtils;
+import com.scanny.scanner.utils.NavigationUtils;
 
 import java.io.IOException;
 
@@ -35,7 +34,6 @@ public class PDFViewerActivity extends BaseActivity {
     protected TextView tv_page;
     protected TextView tv_title;
     private RecyclerView pdfView;
-    private AdView adView;
     private ParcelFileDescriptor fileDescriptor;
     private PdfRenderer renderer;
 
@@ -47,8 +45,6 @@ public class PDFViewerActivity extends BaseActivity {
     }
 
     private void init() {
-        adView = findViewById(R.id.adView);
-        AdsUtils.showGoogleBannerAd(this, adView);
 
         tv_title = (TextView) findViewById(R.id.tv_title);
         tv_page = (TextView) findViewById(R.id.tv_page);

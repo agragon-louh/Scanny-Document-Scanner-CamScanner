@@ -56,7 +56,7 @@ import com.scanny.scanner.main_utils.BitmapUtils;
 import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.BookModel;
 import com.scanny.scanner.models.DBModel;
-import com.scanny.scanner.utils.AdsUtils;
+import com.scanny.scanner.utils.NavigationUtils;
 import com.yalantis.ucrop.UCrop;
 import com.yalantis.ucrop.util.FileUtils;
 
@@ -142,6 +142,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                 intent2.putExtra("current_doc_name", bookImgList.get(0).getPage_name());
                 intent2.putExtra("position", bookImgList.get(0).getPos());
                 intent2.putExtra("from", TAG);
+                intent2.putExtra("is_new_group", Constant.inputType.equals("Group"));
                 startActivity(intent2);
                 Constant.IdentifyActivity = "";
                 finish();
@@ -153,6 +154,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                 intent3.putExtra("TAG", "SavedDocumentActivity");
                 intent3.putExtra("scan_doc_group_name", selected_group_name);
                 intent3.putExtra("current_doc_name", current_docs_name);
+                intent3.putExtra("is_new_group", Constant.inputType.equals("Group"));
                 startActivity(intent3);
                 finish();
             }
@@ -271,7 +273,6 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
         init();
         bindView();
 
-        AdsUtils.loadGoogleInterstitialAd(this, ScannerActivity.this);
     }
 
     private void init() {
@@ -381,7 +382,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                                 destinationUri = Uri.fromFile(getImageFile());
                                 progressBar.setVisibility(View.GONE);
                                 Constant.IdentifyActivity = "UcropActivity";
-                                AdsUtils.showGoogleInterstitialAd(ScannerActivity.this, false);
+                                NavigationUtils.jumpNextActivity(ScannerActivity.this);
                             } catch (IOException e3) {
                                 Log.w(TAG, "Cannot write to " + file3, e3);
                             }
@@ -700,7 +701,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                         idcardImgList.add(1, Constant.IDCardBitmap);
                         Log.e(TAG, "onPictureTaken: " + idcardImgList.size());
                         Constant.IdentifyActivity = "IDCardPreviewActivity";
-                        AdsUtils.showGoogleInterstitialAd(ScannerActivity.this, false);
+                        NavigationUtils.jumpNextActivity(ScannerActivity.this);
                         return;
                     }
                     return;
@@ -718,7 +719,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                 }
             case R.id.iv_done:
                 Constant.IdentifyActivity = "IDCardPreviewActivity";
-                AdsUtils.showGoogleInterstitialAd(ScannerActivity.this, false);
+                NavigationUtils.jumpNextActivity(ScannerActivity.this);
                 return;
             case R.id.iv_done_filter:
                 Constant.IDCardBitmap = tempBitmap;
@@ -730,7 +731,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                     idcardImgList.add(1, Constant.IDCardBitmap);
                     Log.e(TAG, "onPictureTaken: " + idcardImgList.size());
                     Constant.IdentifyActivity = "IDCardPreviewActivity";
-                    AdsUtils.showGoogleInterstitialAd(ScannerActivity.this, false);
+                    NavigationUtils.jumpNextActivity(ScannerActivity.this);
                     return;
                 }
                 idcardImgList.remove(0);
@@ -747,7 +748,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                 if (idcardImgList.size() <= 0) {
                     Constant.current_camera_view = "Document";
                     Constant.IdentifyActivity = "ScannerGalleryActivity";
-                    AdsUtils.showGoogleInterstitialAd(ScannerActivity.this, false);
+                    NavigationUtils.jumpNextActivity(ScannerActivity.this);
                     return;
                 }
                 return;
@@ -975,7 +976,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                             }
                             Constant.original = bitmap;
                             Constant.IdentifyActivity = "CropDocumentActivity2";
-                            AdsUtils.showGoogleInterstitialAd(ScannerActivity.this, false);
+                            NavigationUtils.jumpNextActivity(ScannerActivity.this);
                         }
                     });
                 } else {
@@ -988,7 +989,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                             }
                             Constant.original = bitmap;
                             Constant.IdentifyActivity = "CropDocumentActivity2";
-                            AdsUtils.showGoogleInterstitialAd(ScannerActivity.this, false);
+                            NavigationUtils.jumpNextActivity(ScannerActivity.this);
                         }
                     });
                 }
@@ -1108,6 +1109,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
     }
 
     private class insertGroup extends AsyncTask<Bitmap, Void, Bitmap> {
+        boolean saveFailed;
         String current_doc_name;
         String group_date;
         String group_name;
@@ -1134,25 +1136,21 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                 return null;
             }
             byte[] bytes = BitmapUtils.getBytes(bitmap);
-            File externalFilesDir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-            File file = new File(externalFilesDir, System.currentTimeMillis() + ".jpg");
-            try {
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                fileOutputStream.write(bytes);
-                fileOutputStream.close();
-            } catch (IOException e) {
-                e.printStackTrace();
+            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            if (file == null) {
+                saveFailed = true;
+                return null;
             }
             if (Constant.inputType.equals("Group")) {
                 group_name = "Scanny" + Constant.getDateTime("_ddMMHHmmss");
                 group_date = Constant.getDateTime("yyyy-MM-dd  hh:mm a");
-                current_doc_name = "Doc_" + System.currentTimeMillis();
+                current_doc_name = Constant.newDocName();
                 group_name = dbHelper.createGroup(new DBModel(group_name, group_date, file.getPath(), Constant.current_tag));
                 dbHelper.addGroupDoc(group_name, file.getPath(), current_doc_name, "Insert text here...");
                 return null;
             }
             group_name = GroupDocumentActivity.current_group;
-            current_doc_name = "Doc_" + System.currentTimeMillis();
+            current_doc_name = Constant.newDocName();
             dbHelper.addGroupDoc(group_name, file.getPath(), current_doc_name, "Insert text here...");
             return null;
         }
@@ -1161,6 +1159,10 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
         public void onPostExecute(Bitmap bitmap) {
             super.onPostExecute(bitmap);
             progressDialog.dismiss();
+            if (saveFailed) {
+                Toast.makeText(ScannerActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
+                return;
+            }
             selected_group_name = group_name;
             current_docs_name = current_doc_name;
             Intent intent2 = new Intent(ScannerActivity.this, GroupDocumentActivity.class);
@@ -1169,11 +1171,12 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
             Constant.IdentifyActivity = "";
             finish();
 //            Constant.IdentifyActivity = "DocumentEditorActivity_Scanner";
-//            AdsUtils.showGoogleInterstitialAd(ScannerActivity.this, false);
+//            NavigationUtils.jumpNextActivity(ScannerActivity.this);
         }
     }
 
     private class insertBookGroup extends AsyncTask<Bitmap, Void, Bitmap> {
+        boolean saveFailed;
         String current_doc_name;
         String group_date;
         String group_name;
@@ -1191,30 +1194,27 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
             for (int i = 0; i < bitmapList.size(); i++) {
                 if (bitmapList.get(i) != null) {
                     byte[] bytes = BitmapUtils.getBytes(bitmapList.get(i));
-                    File externalFilesDir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-                    File file = new File(externalFilesDir, System.currentTimeMillis() + ".jpg");
-                    try {
-                        FileOutputStream fileOutputStream = new FileOutputStream(file);
-                        fileOutputStream.write(bytes);
-                        fileOutputStream.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
+                    File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+                    if (file == null) {
+                        saveFailed = true;
+                        continue;
                     }
                     if (!Constant.inputType.equals("Group")) {
                         selected_group_name = GroupDocumentActivity.current_group;
-                        current_doc_name = "Doc_" + System.currentTimeMillis();
+                        current_doc_name = Constant.newDocName();
                         dbHelper.addGroupDoc(selected_group_name, file.getPath(), current_doc_name, "Insert text here...");
                         bookImgList.add(new BookModel(bitmapList.get(i), current_doc_name, i));
-                    } else if (i == 0) {
+                    } else if (group_name == null) {
+                        // The first page that was saved creates the folder.
                         group_name = "Scanny" + Constant.getDateTime("_ddMMHHmmss");
                         group_date = Constant.getDateTime("yyyy-MM-dd  hh:mm a");
-                        current_doc_name = "Doc_" + System.currentTimeMillis();
+                        current_doc_name = Constant.newDocName();
                         group_name = dbHelper.createGroup(new DBModel(group_name, group_date, file.getPath(), Constant.current_tag));
                         selected_group_name = group_name;
                         dbHelper.addGroupDoc(group_name, file.getPath(), current_doc_name, "Insert text here...");
                         bookImgList.add(new BookModel(bitmapList.get(i), current_doc_name, i));
                     } else {
-                        current_doc_name = "Doc_" + System.currentTimeMillis();
+                        current_doc_name = Constant.newDocName();
                         dbHelper.addGroupDoc(selected_group_name, file.getPath(), current_doc_name, "Insert text here...");
                         bookImgList.add(new BookModel(bitmapList.get(i), current_doc_name, i));
                     }
@@ -1227,9 +1227,12 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
         public void onPostExecute(Bitmap bitmap) {
             super.onPostExecute(bitmap);
             progressBar.setVisibility(View.GONE);
+            if (saveFailed) {
+                Toast.makeText(ScannerActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
+            }
             finish();
             Constant.IdentifyActivity = "SavedEditDocumentActivity3";
-            AdsUtils.showGoogleInterstitialAd(ScannerActivity.this, false);
+            NavigationUtils.jumpNextActivity(ScannerActivity.this);
         }
     }
 }

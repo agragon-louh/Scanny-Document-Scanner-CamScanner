@@ -32,8 +32,6 @@ import androidx.viewpager.widget.PagerAdapter;
 import androidx.viewpager.widget.ViewPager;
 
 import com.github.chrisbanes.photoview.PhotoView;
-import com.google.android.gms.ads.AdView;
-import com.google.android.gms.ads.nativead.NativeAdView;
 import com.itextpdf.text.pdf.PdfObject;
 import com.scanny.scanner.R;
 import com.scanny.scanner.adapter.BookViewPagerAdapter;
@@ -44,8 +42,7 @@ import com.scanny.scanner.main_utils.BitmapUtils;
 import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.BookModel;
 import com.scanny.scanner.models.SavedToolType;
-import com.scanny.scanner.utils.AdmobAds;
-import com.scanny.scanner.utils.AdsUtils;
+import com.scanny.scanner.utils.NavigationUtils;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -61,6 +58,12 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
     public DBHelper dataBaseHelper;
     public String edit_doc_grp_name;
     public String from;
+    /**
+     * True when this scan created a new folder (rather than adding a page to an existing one).
+     * Read from the intent: the static Constant.inputType resets to "Group" after process death,
+     * which made "delete page" delete the whole folder.
+     */
+    private boolean isNewGroup;
     public String noteTxt;
     public Uri pdfUri;
     public int position;
@@ -100,6 +103,7 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
                 intent5.putExtra("position", position);
                 intent5.putExtra("edited_doc_grp_name", edit_doc_grp_name);
                 intent5.putExtra("current_doc_name", current_doc_name);
+                intent5.putExtra("is_new_group", isNewGroup);
                 startActivity(intent5);
                 Constant.IdentifyActivity = "";
             } else if (Constant.IdentifyActivity.equals("DocumentEditorActivity_SavedEdit2")) {
@@ -108,13 +112,13 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
                 intent6.putExtra("position", position);
                 intent6.putExtra("edited_doc_grp_name", edit_doc_grp_name);
                 intent6.putExtra("current_doc_name", current_doc_name);
+                intent6.putExtra("is_new_group", isNewGroup);
                 startActivityForResult(intent6, 23);
                 Constant.IdentifyActivity = "";
             }
         }
     };
     private RecyclerView rv_saved_tools;
-    private AdView adView;
 
     @Override
     public void onResume() {
@@ -142,6 +146,13 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
     }
 
     @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        // A rename changes the folder name after this activity was started; keep the new name.
+        outState.putString("edit_doc_group_name", edit_doc_grp_name);
+    }
+
+    @Override
     public void onCreate(Bundle bundle) {
         super.onCreate(bundle);
         setContentView(R.layout.activity_saved_edit_document);
@@ -153,9 +164,6 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
     }
 
     private void init() {
-        adView = findViewById(R.id.adView);
-        AdsUtils.showGoogleBannerAd(this, adView);
-        AdsUtils.loadGoogleInterstitialAd(this, SavedEditDocumentActivity.this);
 
         iv_back = (ImageView) findViewById(R.id.iv_back);
         iv_home = (ImageView) findViewById(R.id.iv_home);
@@ -166,10 +174,12 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
     }
 
     private void bindView() {
-        edit_doc_grp_name = getIntent().getStringExtra("edit_doc_group_name");
+        edit_doc_grp_name = bundle != null && bundle.getString("edit_doc_group_name") != null
+                ? bundle.getString("edit_doc_group_name") : getIntent().getStringExtra("edit_doc_group_name");
         current_doc_name = getIntent().getStringExtra("current_doc_name");
         position = getIntent().getIntExtra("position", -1);
         from = getIntent().getStringExtra("from");
+        isNewGroup = getIntent().getBooleanExtra("is_new_group", Constant.inputType.equals("Group"));
         if (from.equals("ScannerActivity")) {
             iv_preview_edited.setVisibility(View.GONE);
             viewPager.setVisibility(View.VISIBLE);
@@ -236,11 +246,11 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
             case EDIT:
                 if (from.equals("ScannerActivity")) {
                     Constant.IdentifyActivity = "DocumentEditorActivity_SavedEdit2";
-                    AdsUtils.showGoogleInterstitialAd(SavedEditDocumentActivity.this, true);
+                    NavigationUtils.jumpNextActivity(SavedEditDocumentActivity.this);
                     return;
                 }
                 Constant.IdentifyActivity = "DocumentEditorActivity_SavedEdit";
-                AdsUtils.showGoogleInterstitialAd(SavedEditDocumentActivity.this, true);
+                NavigationUtils.jumpNextActivity(SavedEditDocumentActivity.this);
                 return;
             case OPENPDF:
                 ArrayList arrayList = new ArrayList();
@@ -256,11 +266,11 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
             case NOTE:
                 noteTxt = dataBaseHelper.getSingleNote(edit_doc_grp_name, current_doc_name);
                 Constant.IdentifyActivity = "NoteActivity";
-                AdsUtils.showGoogleInterstitialAd(SavedEditDocumentActivity.this, true);
+                NavigationUtils.jumpNextActivity(SavedEditDocumentActivity.this);
                 return;
             case ImageToText:
                 Constant.IdentifyActivity = "ImageToTextActivity";
-                AdsUtils.showGoogleInterstitialAd(SavedEditDocumentActivity.this, true);
+                NavigationUtils.jumpNextActivity(SavedEditDocumentActivity.this);
                 return;
             case SHARE:
                 shareGroupDoc();
@@ -273,11 +283,6 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
                 dialog.getWindow().setLayout(-1, -2);
                 dialog.setCanceledOnTouchOutside(false);
                 dialog.setCancelable(false);
-                if (AdmobAds.SHOW_ADS) {
-                    AdmobAds.loadNativeAds(SavedEditDocumentActivity.this, (View) null, (ViewGroup) dialog.findViewById(R.id.admob_native_container), (NativeAdView) dialog.findViewById(R.id.native_ad_view));
-                } else {
-                    dialog.findViewById(R.id.admob_native_container).setVisibility(View.GONE);
-                }
                 ((TextView) dialog.findViewById(R.id.tv_delete)).setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
@@ -296,16 +301,11 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
                                             Constant.original = ((BookModel) viewPagerList.get(position)).getBitmap();
                                             current_doc_name = ((BookModel) viewPagerList.get(position)).getPage_name();
                                             Log.e(SavedEditDocumentActivity.TAG, "onPageSelected: " + current_doc_name);
-                                            if (Constant.inputType.equals("Group")) {
+                                            if (isNewGroup) {
                                                 byte[] bytes = BitmapUtils.getBytes(Constant.original);
-                                                File externalFilesDir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-                                                File file = new File(externalFilesDir, System.currentTimeMillis() + ".jpg");
-                                                try {
-                                                    FileOutputStream fileOutputStream = new FileOutputStream(file);
-                                                    fileOutputStream.write(bytes);
-                                                    fileOutputStream.close();
-                                                } catch (IOException e) {
-                                                    Log.w(SavedEditDocumentActivity.TAG, "Cannot write to " + file, e);
+                                                File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+                                                if (file == null) {
+                                                    return;
                                                 }
                                                 dataBaseHelper.updateGroupFirstImg(edit_doc_grp_name, file.getPath());
                                             }
@@ -319,7 +319,7 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
                                 }
                                 tv_page.setText(String.format("%s / %s", new Object[]{Integer.valueOf(position + 1), Integer.valueOf(viewPagerList.size())}));
                                 dialog.dismiss();
-                            } else if (Constant.inputType.equals("Group")) {
+                            } else if (isNewGroup) {
                                 dataBaseHelper.deleteGroup(edit_doc_grp_name);
                                 if (GroupDocumentActivity.groupDocumentActivity != null) {
                                     GroupDocumentActivity.groupDocumentActivity.finish();
@@ -331,7 +331,7 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
                                 dialog.dismiss();
                                 finish();
                             }
-                        } else if (Constant.inputType.equals("Group")) {
+                        } else if (isNewGroup) {
                             dataBaseHelper.deleteGroup(edit_doc_grp_name);
                             dialog.dismiss();
                             finish();
@@ -373,11 +373,6 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
         dialog.getWindow().setBackgroundDrawable(new ColorDrawable(0));
         dialog.setCanceledOnTouchOutside(false);
         dialog.setCancelable(false);
-        if (AdmobAds.SHOW_ADS) {
-            AdmobAds.loadNativeAds(SavedEditDocumentActivity.this, (View) null, (ViewGroup) dialog.findViewById(R.id.admob_native_container), (NativeAdView) dialog.findViewById(R.id.native_ad_view));
-        } else {
-            dialog.findViewById(R.id.admob_native_container).setVisibility(View.GONE);
-        }
         final EditText editText = (EditText) dialog.findViewById(R.id.et_group_name);
         editText.setText(str);
         editText.setSelection(editText.length());
@@ -394,6 +389,7 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
                 }
                 dialog.dismiss();
                 edit_doc_grp_name = newName;
+                getIntent().putExtra("edit_doc_group_name", newName);
                 GroupDocumentActivity.current_group = newName;
             }
         });
@@ -414,11 +410,6 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
         dialog.getWindow().setBackgroundDrawable(new ColorDrawable(0));
         dialog.setCanceledOnTouchOutside(false);
         dialog.setCancelable(false);
-        if (AdmobAds.SHOW_ADS) {
-            AdmobAds.loadNativeAds(SavedEditDocumentActivity.this, (View) null, (ViewGroup) dialog.findViewById(R.id.admob_native_container), (NativeAdView) dialog.findViewById(R.id.native_ad_view));
-        } else {
-            dialog.findViewById(R.id.admob_native_container).setVisibility(View.GONE);
-        }
         ((RelativeLayout) dialog.findViewById(R.id.rl_share_pdf)).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -467,11 +458,6 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
         dialog.getWindow().setBackgroundDrawable(new ColorDrawable(0));
         dialog.setCancelable(false);
         dialog.setCanceledOnTouchOutside(false);
-        if (AdmobAds.SHOW_ADS) {
-            AdmobAds.loadNativeAds(SavedEditDocumentActivity.this, (View) null, (ViewGroup) dialog.findViewById(R.id.admob_native_container), (NativeAdView) dialog.findViewById(R.id.native_ad_view));
-        } else {
-            dialog.findViewById(R.id.admob_native_container).setVisibility(View.GONE);
-        }
         final EditText et_enter_pswrd = (EditText) dialog.findViewById(R.id.et_enter_pswrd);
         final ImageView iv_enter_pswrd_show = (ImageView) dialog.findViewById(R.id.iv_enter_pswrd_show);
         final ImageView iv_enter_pswrd_hide = (ImageView) dialog.findViewById(R.id.iv_enter_pswrd_hide);
@@ -592,7 +578,7 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
             progressDialog.dismiss();
             selected_group_name = group_name;
             Constant.IdentifyActivity = "PDFViewerActivity";
-            AdsUtils.showGoogleInterstitialAd(SavedEditDocumentActivity.this, true);
+            NavigationUtils.jumpNextActivity(SavedEditDocumentActivity.this);
         }
     }
 
@@ -655,6 +641,7 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
     }
 
     private class rotateDoc extends AsyncTask<String, Void, String> {
+        boolean saveFailed;
         ProgressDialog progressDialog;
 
         private rotateDoc() {
@@ -681,18 +668,14 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
             System.gc();
             Constant.original = createBitmap;
             byte[] bytes = BitmapUtils.getBytes(Constant.original);
-            File externalFilesDir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-            File file = new File(externalFilesDir, System.currentTimeMillis() + ".jpg");
-            try {
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                fileOutputStream.write(bytes);
-                fileOutputStream.close();
-            } catch (IOException e) {
-                Log.w(SavedEditDocumentActivity.TAG, "Cannot write to " + file, e);
+            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            if (file == null) {
+                saveFailed = true;
+                return null;
             }
             if (from.equals("ScannerActivity")) {
                 if (position == 0) {
-                    if (Constant.inputType.equals("Group")) {
+                    if (isNewGroup) {
                         dataBaseHelper.updateGroupFirstImg(edit_doc_grp_name, file.getPath());
                     }
                     dataBaseHelper.updateGroupListDoc(edit_doc_grp_name, current_doc_name, file.getPath());
@@ -702,7 +685,7 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
                 dataBaseHelper.updateGroupListDoc(edit_doc_grp_name, current_doc_name, file.getPath());
                 Log.e(SavedEditDocumentActivity.TAG, "doInBackground: " + current_doc_name);
                 return null;
-            } else if (Constant.inputType.equals("Group")) {
+            } else if (isNewGroup) {
                 dataBaseHelper.updateGroupFirstImg(edit_doc_grp_name, file.getPath());
                 dataBaseHelper.updateGroupListDoc(edit_doc_grp_name, current_doc_name, file.getPath());
                 return null;
@@ -731,10 +714,14 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
                 iv_preview_edited.setImageBitmap(Constant.original);
             }
             progressDialog.dismiss();
+            if (saveFailed) {
+                Toast.makeText(SavedEditDocumentActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
+            }
         }
     }
 
     private class updateEditedBookImg extends AsyncTask<String, Void, String> {
+        boolean saveFailed;
         ProgressDialog progressDialog;
 
         private updateEditedBookImg() {
@@ -757,17 +744,13 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
                 return null;
             }
             byte[] bytes = BitmapUtils.getBytes(Constant.original);
-            File externalFilesDir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-            File file = new File(externalFilesDir, System.currentTimeMillis() + ".jpg");
-            try {
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                fileOutputStream.write(bytes);
-                fileOutputStream.close();
-            } catch (IOException e) {
-                Log.w(SavedEditDocumentActivity.TAG, "Cannot write to " + file, e);
+            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            if (file == null) {
+                saveFailed = true;
+                return null;
             }
             if (position == 0) {
-                if (Constant.inputType.equals("Group")) {
+                if (isNewGroup) {
                     dataBaseHelper.updateGroupFirstImg(edit_doc_grp_name, file.getPath());
                 }
                 dataBaseHelper.updateGroupListDoc(edit_doc_grp_name, current_doc_name, file.getPath());
@@ -790,6 +773,9 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
             viewPager.setAdapter(bookViewPagerAdapter);
             viewPager.setCurrentItem(position);
             progressDialog.dismiss();
+            if (saveFailed) {
+                Toast.makeText(SavedEditDocumentActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
+            }
         }
     }
 }

@@ -17,6 +17,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.util.Log;
 import android.view.View;
+import android.widget.Toast;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
@@ -43,7 +44,7 @@ import com.scanny.scanner.scrapbook.LocalDisplay;
 import com.scanny.scanner.scrapbook.StickerConfigInterface;
 import com.scanny.scanner.scrapbook.StickerHolderView;
 import com.scanny.scanner.scrapbook.TextStickerConfig;
-import com.scanny.scanner.utils.AdsUtils;
+import com.scanny.scanner.utils.NavigationUtils;
 import com.scanny.scanner.widget.AspectRatioLayout;
 
 import java.io.File;
@@ -137,7 +138,6 @@ public class IDCardPreviewActivity extends BaseActivity implements View.OnClickL
         LocalDisplay.init(this);
         setContentView(R.layout.activity_idcard_preview);
         dbHelper = new DBHelper(this);
-        AdsUtils.loadGoogleInterstitialAd(this, IDCardPreviewActivity.this);
         init();
         bindView();
     }
@@ -202,7 +202,7 @@ public class IDCardPreviewActivity extends BaseActivity implements View.OnClickL
         switch (view.getId()) {
             case R.id.ly_add_new:
                 Constant.IdentifyActivity = "IDCardGalleryActivity";
-                AdsUtils.showGoogleInterstitialAd(IDCardPreviewActivity.this, true);
+                NavigationUtils.jumpNextActivity(IDCardPreviewActivity.this);
                 return;
             case R.id.iv_back:
                 onBackPressed();
@@ -217,7 +217,7 @@ public class IDCardPreviewActivity extends BaseActivity implements View.OnClickL
                 return;
             case R.id.ly_edit:
                 Constant.IdentifyActivity = "DocumentEditorActivity_IDCard";
-                AdsUtils.showGoogleInterstitialAd(IDCardPreviewActivity.this, true);
+                NavigationUtils.jumpNextActivity(IDCardPreviewActivity.this);
                 return;
             case R.id.ly_horizontal:
                 stickerHolderView.flipStickerHorizontal(true);
@@ -320,6 +320,7 @@ public class IDCardPreviewActivity extends BaseActivity implements View.OnClickL
     }
 
     private class saveIDCard extends AsyncTask<Bitmap, Void, Bitmap> {
+        boolean saveFailed;
         String current_doc_name;
         String group_date;
         String group_name;
@@ -347,25 +348,21 @@ public class IDCardPreviewActivity extends BaseActivity implements View.OnClickL
                 return null;
             }
             byte[] bytes = BitmapUtils.getBytes(finalBitmap);
-            File externalFilesDir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-            File file = new File(externalFilesDir, System.currentTimeMillis() + ".jpg");
-            try {
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                fileOutputStream.write(bytes);
-                fileOutputStream.close();
-            } catch (IOException e) {
-                Log.w(IDCardPreviewActivity.TAG, "Cannot write to " + file, e);
+            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            if (file == null) {
+                saveFailed = true;
+                return null;
             }
             if (Constant.inputType.equals("Group")) {
                 group_name = "Scanny" + Constant.getDateTime("_ddMMHHmmss");
                 group_date = Constant.getDateTime("yyyy-MM-dd  hh:mm a");
-                current_doc_name = "Doc_" + System.currentTimeMillis();
+                current_doc_name = Constant.newDocName();
                 group_name = dbHelper.createGroup(new DBModel(group_name, group_date, file.getPath(), Constant.current_tag));
                 dbHelper.addGroupDoc(group_name, file.getPath(), current_doc_name, "Insert text here...");
                 return null;
             }
             group_name = GroupDocumentActivity.current_group;
-            current_doc_name = "Doc_" + System.currentTimeMillis();
+            current_doc_name = Constant.newDocName();
             dbHelper.addGroupDoc(group_name, file.getPath(), current_doc_name, "Insert text here...");
             return null;
         }
@@ -374,6 +371,10 @@ public class IDCardPreviewActivity extends BaseActivity implements View.OnClickL
         public void onPostExecute(Bitmap bitmap) {
             super.onPostExecute(bitmap);
             progressDialog.dismiss();
+            if (saveFailed) {
+                Toast.makeText(IDCardPreviewActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
+                return;
+            }
 
             Intent intent2 = new Intent(IDCardPreviewActivity.this, GroupDocumentActivity.class);
             intent2.putExtra("current_group", group_name);

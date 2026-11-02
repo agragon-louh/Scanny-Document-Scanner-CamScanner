@@ -15,7 +15,7 @@ import com.scanny.scanner.R;
 import com.scanny.scanner.activity.GroupDocumentActivity;
 import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.DBModel;
-import com.scanny.scanner.utils.AdsUtils;
+import com.scanny.scanner.utils.NavigationUtils;
 
 import java.util.ArrayList;
 
@@ -70,7 +70,7 @@ public class GroupDocAdapter extends RecyclerView.Adapter<GroupDocAdapter.ViewHo
             public void onClick(View v) {
                 Constant.inputType = "GroupItem";
                 Constant.IdentifyActivity = "ScannerActivity2";
-                AdsUtils.showGoogleInterstitialAd(activity, true);
+                NavigationUtils.jumpNextActivity(activity);
             }
         });
 

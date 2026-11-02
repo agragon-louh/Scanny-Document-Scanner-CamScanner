@@ -16,13 +16,10 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import com.google.android.gms.ads.AdView;
-import com.google.android.gms.ads.nativead.NativeAdView;
 import com.scanny.scanner.R;
 import com.scanny.scanner.db.DBHelper;
 import com.scanny.scanner.main_utils.Constant;
-import com.scanny.scanner.utils.AdmobAds;
-import com.scanny.scanner.utils.AdsUtils;
+import com.scanny.scanner.utils.NavigationUtils;
 
 
 public class SavedDocumentActivity extends BaseActivity implements View.OnClickListener {
@@ -39,6 +36,13 @@ public class SavedDocumentActivity extends BaseActivity implements View.OnClickL
         @Override
         public void onReceive(Context context, Intent intent) {
             if (Constant.IdentifyActivity.equals("ScannerActivity_Retake2")) {
+                // The page being retaken was already saved; drop it (and the folder it alone
+                // created) so each retake does not leave the rejected page behind.
+                if (getIntent().getBooleanExtra("is_new_group", false)) {
+                    dataBaseHelper.deleteGroup(preview_doc_grp_name);
+                } else {
+                    dataBaseHelper.deleteSingleDoc(preview_doc_grp_name, current_doc_name);
+                }
                 startActivity(new Intent(SavedDocumentActivity.this, ScannerActivity.class));
                 Constant.IdentifyActivity = "";
                 finish();
@@ -47,6 +51,7 @@ public class SavedDocumentActivity extends BaseActivity implements View.OnClickL
                 intent2.putExtra("TAG", SavedDocumentActivity.TAG);
                 intent2.putExtra("scan_doc_group_name", preview_doc_grp_name);
                 intent2.putExtra("current_doc_name", current_doc_name);
+                intent2.putExtra("is_new_group", getIntent().getBooleanExtra("is_new_group", false));
                 startActivity(intent2);
                 Constant.IdentifyActivity = "";
                 finish();
@@ -55,7 +60,6 @@ public class SavedDocumentActivity extends BaseActivity implements View.OnClickL
     };
     private ImageView iv_preview_saved;
     private LinearLayout llRetake, llEdit, llRotate, llDelete;
-    private AdView adView;
 
     @Override
     public void onResume() {
@@ -88,9 +92,6 @@ public class SavedDocumentActivity extends BaseActivity implements View.OnClickL
     }
 
     private void init() {
-        adView = findViewById(R.id.adView);
-        AdsUtils.showGoogleBannerAd(this, adView);
-        AdsUtils.loadGoogleInterstitialAd(this, SavedDocumentActivity.this);
 
         iv_back = (ImageView) findViewById(R.id.iv_back);
         iv_preview_saved = (ImageView) findViewById(R.id.iv_preview_saved);
@@ -125,11 +126,6 @@ public class SavedDocumentActivity extends BaseActivity implements View.OnClickL
                 dialog.getWindow().setLayout(-1, -2);
                 dialog.setCanceledOnTouchOutside(false);
                 dialog.setCancelable(false);
-                if (AdmobAds.SHOW_ADS) {
-                    AdmobAds.loadNativeAds(SavedDocumentActivity.this, (View) null, (ViewGroup) dialog.findViewById(R.id.admob_native_container), (NativeAdView) dialog.findViewById(R.id.native_ad_view));
-                } else {
-                    dialog.findViewById(R.id.admob_native_container).setVisibility(View.GONE);
-                }
                 ((TextView) dialog.findViewById(R.id.tv_delete)).setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
@@ -154,11 +150,11 @@ public class SavedDocumentActivity extends BaseActivity implements View.OnClickL
                 return;
             case R.id.llEdit:
                 Constant.IdentifyActivity = "DocumentEditorActivity_Saved";
-                AdsUtils.showGoogleInterstitialAd(SavedDocumentActivity.this, true);
+                NavigationUtils.jumpNextActivity(SavedDocumentActivity.this);
                 return;
             case R.id.llRetake:
                 Constant.IdentifyActivity = "ScannerActivity_Retake2";
-                AdsUtils.showGoogleInterstitialAd(SavedDocumentActivity.this, true);
+                NavigationUtils.jumpNextActivity(SavedDocumentActivity.this);
                 return;
             case R.id.llRotate:
                 Bitmap bitmap = Constant.original;

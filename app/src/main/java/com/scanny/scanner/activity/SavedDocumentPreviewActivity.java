@@ -34,8 +34,6 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager.widget.PagerAdapter;
 import androidx.viewpager.widget.ViewPager;
 
-import com.google.android.gms.ads.AdView;
-import com.google.android.gms.ads.nativead.NativeAdView;
 import com.itextpdf.text.pdf.PdfObject;
 import com.scanny.scanner.R;
 import com.scanny.scanner.adapter.PreviewPagerAdapter;
@@ -46,8 +44,7 @@ import com.scanny.scanner.main_utils.BitmapUtils;
 import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.DBModel;
 import com.scanny.scanner.models.SavedToolType;
-import com.scanny.scanner.utils.AdmobAds;
-import com.scanny.scanner.utils.AdsUtils;
+import com.scanny.scanner.utils.NavigationUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -100,13 +97,14 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
                 intent5.putExtra("position", position);
                 intent5.putExtra("edited_doc_grp_name", edit_doc_grp_name);
                 intent5.putExtra("current_doc_name", current_doc_name);
+                // Editing a page of an existing folder.
+                intent5.putExtra("is_new_group", false);
                 startActivityForResult(intent5, 21);
                 Constant.IdentifyActivity = "";
             }
         }
     };
     private RecyclerView rv_saved_tools;
-    private AdView adView;
 
     @Override
     public void onResume() {
@@ -137,6 +135,13 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
     }
 
     @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        // A rename changes the folder name after this activity was started; keep the new name.
+        outState.putString("edit_doc_group_name", edit_doc_grp_name);
+    }
+
+    @Override
     public void onCreate(Bundle bundle) {
         super.onCreate(bundle);
         setContentView(R.layout.activity_saved_document_preview);
@@ -148,9 +153,6 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
     }
 
     private void init() {
-        adView = findViewById(R.id.adView);
-        AdsUtils.showGoogleBannerAd(this, adView);
-        AdsUtils.loadGoogleInterstitialAd(this, SavedDocumentPreviewActivity.this);
 
         iv_back = (ImageView) findViewById(R.id.iv_back);
         iv_home = (ImageView) findViewById(R.id.iv_home);
@@ -160,7 +162,8 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
     }
 
     private void bindView() {
-        edit_doc_grp_name = getIntent().getStringExtra("edit_doc_group_name");
+        edit_doc_grp_name = bundle != null && bundle.getString("edit_doc_group_name") != null
+                ? bundle.getString("edit_doc_group_name") : getIntent().getStringExtra("edit_doc_group_name");
         current_doc_name = getIntent().getStringExtra("current_doc_name");
         position = getIntent().getIntExtra("position", -1);
 //        currentDocList = GroupDocumentActivity.currentGroupList;
@@ -201,7 +204,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
                     e.printStackTrace();
                 }
                 Constant.IdentifyActivity = "DocumentEditorActivity_SavedPreview";
-                AdsUtils.showGoogleInterstitialAd(SavedDocumentPreviewActivity.this, true);
+                NavigationUtils.jumpNextActivity(SavedDocumentPreviewActivity.this);
                 return;
             case OPENPDF:
                 try {
@@ -231,7 +234,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
             case NOTE:
                 noteTxt = dataBaseHelper.getSingleNote(edit_doc_grp_name, current_doc_name);
                 Constant.IdentifyActivity = "NoteActivity_Preview";
-                AdsUtils.showGoogleInterstitialAd(SavedDocumentPreviewActivity.this, true);
+                NavigationUtils.jumpNextActivity(SavedDocumentPreviewActivity.this);
                 return;
             case ImageToText:
                 try {
@@ -242,7 +245,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
                     e4.printStackTrace();
                 }
                 Constant.IdentifyActivity = "ImageToTextActivity_Preview";
-                AdsUtils.showGoogleInterstitialAd(SavedDocumentPreviewActivity.this, true);
+                NavigationUtils.jumpNextActivity(SavedDocumentPreviewActivity.this);
                 return;
             case SHARE:
                 try {
@@ -262,11 +265,6 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
                 dialog.getWindow().setLayout(-1, -2);
                 dialog.setCanceledOnTouchOutside(false);
                 dialog.setCancelable(false);
-                if (AdmobAds.SHOW_ADS) {
-                    AdmobAds.loadNativeAds(SavedDocumentPreviewActivity.this, (View) null, (ViewGroup) dialog.findViewById(R.id.admob_native_container), (NativeAdView) dialog.findViewById(R.id.native_ad_view));
-                } else {
-                    dialog.findViewById(R.id.admob_native_container).setVisibility(View.GONE);
-                }
                 ((TextView) dialog.findViewById(R.id.tv_delete)).setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
@@ -326,11 +324,6 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
         dialog.getWindow().setBackgroundDrawable(new ColorDrawable(0));
         dialog.setCanceledOnTouchOutside(false);
         dialog.setCancelable(false);
-        if (AdmobAds.SHOW_ADS) {
-            AdmobAds.loadNativeAds(SavedDocumentPreviewActivity.this, (View) null, (ViewGroup) dialog.findViewById(R.id.admob_native_container), (NativeAdView) dialog.findViewById(R.id.native_ad_view));
-        } else {
-            dialog.findViewById(R.id.admob_native_container).setVisibility(View.GONE);
-        }
         final EditText editText = (EditText) dialog.findViewById(R.id.et_group_name);
         editText.setText(str);
         editText.setSelection(editText.length());
@@ -347,6 +340,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
                 }
                 dialog.dismiss();
                 edit_doc_grp_name = newName;
+                getIntent().putExtra("edit_doc_group_name", newName);
                 GroupDocumentActivity.current_group = newName;
             }
         });
@@ -367,11 +361,6 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
         dialog.getWindow().setBackgroundDrawable(new ColorDrawable(0));
         dialog.setCanceledOnTouchOutside(false);
         dialog.setCancelable(false);
-        if (AdmobAds.SHOW_ADS) {
-            AdmobAds.loadNativeAds(this, (View) null, (ViewGroup) dialog.findViewById(R.id.admob_native_container), (NativeAdView) dialog.findViewById(R.id.native_ad_view));
-        } else {
-            dialog.findViewById(R.id.admob_native_container).setVisibility(View.GONE);
-        }
         ((RelativeLayout) dialog.findViewById(R.id.rl_share_pdf)).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -420,11 +409,6 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
         dialog.getWindow().setBackgroundDrawable(new ColorDrawable(0));
         dialog.setCancelable(false);
         dialog.setCanceledOnTouchOutside(false);
-        if (AdmobAds.SHOW_ADS) {
-            AdmobAds.loadNativeAds(this, (View) null, (ViewGroup) dialog.findViewById(R.id.admob_native_container), (NativeAdView) dialog.findViewById(R.id.native_ad_view));
-        } else {
-            dialog.findViewById(R.id.admob_native_container).setVisibility(View.GONE);
-        }
         final EditText et_enter_pswrd = (EditText) dialog.findViewById(R.id.et_enter_pswrd);
         final ImageView iv_enter_pswrd_show = (ImageView) dialog.findViewById(R.id.iv_enter_pswrd_show);
         final ImageView iv_enter_pswrd_hide = (ImageView) dialog.findViewById(R.id.iv_enter_pswrd_hide);
@@ -608,11 +592,12 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
             progressDialog.dismiss();
             selected_group_name = group_name;
             Constant.IdentifyActivity = "PDFViewerActivity_Preview";
-            AdsUtils.showGoogleInterstitialAd(SavedDocumentPreviewActivity.this, true);
+            NavigationUtils.jumpNextActivity(SavedDocumentPreviewActivity.this);
         }
     }
 
     private class rotateDoc extends AsyncTask<String, Void, String> {
+        boolean saveFailed;
         ProgressDialog progressDialog;
 
         private rotateDoc() {
@@ -639,14 +624,10 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
             System.gc();
             Constant.original = createBitmap;
             byte[] bytes = BitmapUtils.getBytes(Constant.original);
-            File externalFilesDir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-            File file = new File(externalFilesDir, System.currentTimeMillis() + ".jpg");
-            try {
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                fileOutputStream.write(bytes);
-                fileOutputStream.close();
-            } catch (IOException e) {
-                Log.w(TAG, "Cannot write to " + file, e);
+            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            if (file == null) {
+                saveFailed = true;
+                return null;
             }
             if (position == 0) {
                 dataBaseHelper.updateGroupFirstImg(edit_doc_grp_name, file.getPath());
@@ -666,6 +647,9 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
             viewPager.setAdapter(previewPagerAdapter);
             viewPager.setCurrentItem(position);
             progressDialog.dismiss();
+            if (saveFailed) {
+                Toast.makeText(SavedDocumentPreviewActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
+            }
         }
     }
 
@@ -726,6 +710,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
     }
 
     private class updateEditedImg extends AsyncTask<String, Void, String> {
+        boolean saveFailed;
         private ProgressDialog progressDialog;
 
         private updateEditedImg() {
@@ -748,14 +733,10 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
                 return null;
             }
             byte[] bytes = BitmapUtils.getBytes(Constant.original);
-            File externalFilesDir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-            File file = new File(externalFilesDir, System.currentTimeMillis() + ".jpg");
-            try {
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                fileOutputStream.write(bytes);
-                fileOutputStream.close();
-            } catch (IOException e) {
-                Log.w(TAG, "Cannot write to " + file, e);
+            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            if (file == null) {
+                saveFailed = true;
+                return null;
             }
             if (position == 0) {
                 dataBaseHelper.updateGroupFirstImg(edit_doc_grp_name, file.getPath());
@@ -775,6 +756,9 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
             viewPager.setAdapter(previewPagerAdapter);
             viewPager.setCurrentItem(position);
             progressDialog.dismiss();
+            if (saveFailed) {
+                Toast.makeText(SavedDocumentPreviewActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
+            }
         }
     }
 }

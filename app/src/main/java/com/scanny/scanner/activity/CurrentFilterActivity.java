@@ -11,18 +11,18 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.view.View;
+import android.widget.Toast;
 import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.github.chrisbanes.photoview.PhotoView;
-import com.google.android.gms.ads.AdView;
 import com.scanlibrary.ScanActivity;
 import com.scanny.scanner.R;
 import com.scanny.scanner.db.DBHelper;
 import com.scanny.scanner.main_utils.BitmapUtils;
 import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.DBModel;
-import com.scanny.scanner.utils.AdsUtils;
+import com.scanny.scanner.utils.NavigationUtils;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -62,7 +62,6 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
         }
     };
     private ProgressDialog progressDialog;
-    private AdView adView;
 
     @Override
     public void onResume() {
@@ -94,7 +93,6 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
     }
 
     private void init() {
-        adView = findViewById(R.id.adView);
         iv_back = (ImageView) findViewById(R.id.iv_back);
         iv_done = (ImageView) findViewById(R.id.iv_done);
         iv_preview_filter = (PhotoView) findViewById(R.id.iv_preview_filter);
@@ -107,8 +105,6 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
             iv_preview_filter.setImageBitmap(original);
         }
 
-        AdsUtils.loadGoogleInterstitialAd(this, CurrentFilterActivity.this);
-        AdsUtils.showGoogleBannerAd(this, adView);
     }
 
     @Override
@@ -170,7 +166,7 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
                     Constant.singleSideBitmap = original;
                 }
                 Constant.IdentifyActivity = "IDCardPreviewActivity2";
-                AdsUtils.showGoogleInterstitialAd(CurrentFilterActivity.this, true);
+                NavigationUtils.jumpNextActivity(CurrentFilterActivity.this);
                 return;
             case R.id.iv_ocv_black:
                 showProgressDialog();
@@ -296,6 +292,7 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
     }
 
     private class insertGroup extends AsyncTask<Bitmap, Void, Bitmap> {
+        boolean saveFailed;
         String current_doc_name;
         boolean created_new_group;
         String group_date;
@@ -323,26 +320,22 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
                 return null;
             }
             byte[] bytes = BitmapUtils.getBytes(bitmap);
-            File externalFilesDir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
-            File file = new File(externalFilesDir, System.currentTimeMillis() + ".jpg");
-            try {
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                fileOutputStream.write(bytes);
-                fileOutputStream.close();
-            } catch (IOException e) {
-                e.printStackTrace();
+            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            if (file == null) {
+                saveFailed = true;
+                return null;
             }
             created_new_group = Constant.inputType.equals("Group");
             if (Constant.inputType.equals("Group")) {
                 group_name = "Scanny" + Constant.getDateTime("_ddMMHHmmss");
                 group_date = Constant.getDateTime("yyyy-MM-dd  hh:mm a");
-                current_doc_name = "Doc_" + System.currentTimeMillis();
+                current_doc_name = Constant.newDocName();
                 group_name = dataBaseHelper.createGroup(new DBModel(group_name, group_date, file.getPath(), Constant.current_tag));
                 dataBaseHelper.addGroupDoc(group_name, file.getPath(), current_doc_name, "Insert text here...");
                 return null;
             }
             group_name = GroupDocumentActivity.current_group;
-            current_doc_name = "Doc_" + System.currentTimeMillis();
+            current_doc_name = Constant.newDocName();
             dataBaseHelper.addGroupDoc(group_name, file.getPath(), current_doc_name, "Insert text here...");
             return null;
         }
@@ -351,11 +344,15 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
         public void onPostExecute(Bitmap bitmap) {
             super.onPostExecute(bitmap);
             progressDialog.dismiss();
+            if (saveFailed) {
+                Toast.makeText(CurrentFilterActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
+                return;
+            }
             selected_group_name = group_name;
             current_docs_name = this.current_doc_name;
             CurrentFilterActivity.this.created_new_group = this.created_new_group;
             Constant.IdentifyActivity = "SavedDocumentActivity";
-            AdsUtils.showGoogleInterstitialAd(CurrentFilterActivity.this, true);
+            NavigationUtils.jumpNextActivity(CurrentFilterActivity.this);
         }
     }
 }

@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- The app shows no ads; make sure no library brings the advertising-ID permission back. -->
+    <uses-permission
+        android:name="com.google.android.gms.permission.AD_ID"
+        tools:node="remove" />
     <!--
         Storage permissions are scoped to the Android versions that still honour them.
         Gallery import uses the system photo picker (no permission needed) and exports are
@@ -30,7 +34,7 @@
 
     <!--
         Removed: ACCESS_WIFI_STATE, WAKE_LOCK, RECEIVE_BOOT_COMPLETED and com.android.vending.BILLING.
-        The app has no billing or boot code; SDKs that need WAKE_LOCK etc. (OneSignal, Ads)
+        The app has no billing or boot code; SDKs that need WAKE_LOCK etc. (OneSignal)
         declare them in their own manifests.
     -->
 
@@ -150,9 +154,6 @@
         <meta-data
             android:name="com.google.android.gms.vision.DEPENDENCIES"
             android:value="ocr" />
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="@string/admob_app_id" />
 
     </application>
 

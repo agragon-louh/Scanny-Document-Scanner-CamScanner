@@ -30,6 +30,16 @@ public class Constant {
     public static int selectedFont;
     public static int selectedWatermarkFont;
     public static Bitmap singleSideBitmap;
+    private static long lastDocId;
+
+    /**
+     * Returns a page name that no other page has. Pages are updated and deleted by name, so two
+     * pages created in the same millisecond (e.g. a multi-page book scan) must not share one.
+     */
+    public static synchronized String newDocName() {
+        lastDocId = Math.max(System.currentTimeMillis(), lastDocId + 1);
+        return "Doc_" + lastDocId;
+    }
 
 
     public static String PREFS_NAME = "theme_prefs";

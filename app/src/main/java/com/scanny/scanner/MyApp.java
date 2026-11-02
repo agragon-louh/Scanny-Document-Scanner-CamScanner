@@ -6,9 +6,6 @@ import android.content.SharedPreferences;
 
 import androidx.appcompat.app.AppCompatDelegate;
 
-import com.google.android.gms.ads.MobileAds;
-import com.google.android.gms.ads.initialization.InitializationStatus;
-import com.google.android.gms.ads.initialization.OnInitializationCompleteListener;
 import com.onesignal.OneSignal;
 import com.scanny.scanner.main_utils.Constant;
 
@@ -17,8 +14,6 @@ import me.pqpo.smartcropperlib.SmartCropper;
 public class MyApp extends Application {
     private static final String ONESIGNAL_APP_ID = "########-####-####-####-############";
     private static MyApp instance;
-    private boolean showAds = true;
-    private AppOpenManager appOpenManager;
 
     public static MyApp getInstance() {
         return instance;
@@ -30,12 +25,6 @@ public class MyApp extends Application {
         instance = this;
         // 如果使用机器学习代替 Canny 算子，请初始化 ImageDetector
         SmartCropper.buildImageDetector(this);
-
-        MobileAds.initialize(this, new OnInitializationCompleteListener() {
-            public void onInitializationComplete(InitializationStatus initializationStatus) {
-            }
-        });
-        appOpenManager = new AppOpenManager(this);
 
         SharedPreferences sharedPreferences = getSharedPreferences(Constant.PREFS_NAME, Context.MODE_PRIVATE);
         sharedPreferences.edit().putInt(Constant.KEY_THEME, Constant.THEME_DARK).apply();
@@ -72,13 +61,5 @@ public class MyApp extends Application {
     private void setTheme(int themeMode, int prefsMode) {
         AppCompatDelegate.setDefaultNightMode(themeMode);
         saveTheme(prefsMode);
-    }
-
-    public boolean isShowAds() {
-        return showAds;
-    }
-
-    public void setShowAds(boolean showAds) {
-        this.showAds = showAds;
     }
 }

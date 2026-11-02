@@ -9,6 +9,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.DBModel;
 
 import java.util.ArrayList;
@@ -27,7 +28,7 @@ import java.util.ArrayList;
  */
 public class DBHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "DocumentDB";
-    private static final int DATABASE_VERSION = 2;
+    private static final int DATABASE_VERSION = 3;
     private static final String KEY_FIRST_IMAGE = "firstimage";
     private static final String KEY_ID = "id";
     private static final String KEY_IMG_NAME = "imgname";
@@ -50,6 +51,15 @@ public class DBHelper extends SQLiteOpenHelper {
             this.id = id;
             this.table = table;
         }
+    }
+
+    /**
+     * True for tables that must never be used as (or dropped as) a folder's page table: the folder
+     * list itself and SQLite/Android bookkeeping tables. Compared case-insensitively, like SQLite.
+     */
+    private static boolean isReservedTable(String table) {
+        String lower = table.toLowerCase(java.util.Locale.ROOT);
+        return lower.equals(TABLE_NAME) || lower.equals("android_metadata") || lower.startsWith("sqlite_");
     }
 
     /** Identifiers cannot be bound as query parameters, so they are quoted and escaped. */
@@ -104,13 +114,34 @@ public class DBHelper extends SQLiteOpenHelper {
                     // Keep pointing at the version 1 table. Folders that already shared a table
                     // keep sharing it: their pages cannot be told apart any more.
                     String table = name == null ? "" : name.replace(" ", "");
-                    if (table.isEmpty()) {
+                    // A folder named e.g. "All Docs" would otherwise point at the folder list itself.
+                    if (table.isEmpty() || isReservedTable(table)) {
                         table = "group " + id;
                     }
                     sQLiteDatabase.execSQL("CREATE TABLE IF NOT EXISTS " + quote(table) + DOC_TABLE_COLUMNS);
                     ContentValues contentValues = new ContentValues();
                     contentValues.put(KEY_DOC_TABLE, table);
                     sQLiteDatabase.update(TABLE_NAME, contentValues, "id = ?", new String[]{String.valueOf(id)});
+                }
+            } finally {
+                cursor.close();
+            }
+        }
+        if (oldVersion < 3) {
+            // Databases upgraded by the first version 2 release may already point a folder at a
+            // reserved table. Give such folders a table of their own.
+            Cursor cursor = sQLiteDatabase.rawQuery("SELECT id, tbl FROM alldocs", null);
+            try {
+                while (cursor.moveToNext()) {
+                    long id = cursor.getLong(0);
+                    String table = cursor.getString(1);
+                    if (table == null || isReservedTable(table)) {
+                        String newTable = "group " + id;
+                        sQLiteDatabase.execSQL("CREATE TABLE IF NOT EXISTS " + quote(newTable) + DOC_TABLE_COLUMNS);
+                        ContentValues contentValues = new ContentValues();
+                        contentValues.put(KEY_DOC_TABLE, newTable);
+                        sQLiteDatabase.update(TABLE_NAME, contentValues, "id = ?", new String[]{String.valueOf(id)});
+                    }
                 }
             } finally {
                 cursor.close();
@@ -125,7 +156,7 @@ public class DBHelper extends SQLiteOpenHelper {
         }
         Cursor cursor = db.rawQuery("SELECT id, tbl FROM alldocs WHERE name = ? COLLATE NOCASE ORDER BY name = ? DESC LIMIT 1", new String[]{groupName, groupName});
         try {
-            if (!cursor.moveToFirst() || cursor.isNull(1)) {
+            if (!cursor.moveToFirst() || cursor.isNull(1) || isReservedTable(cursor.getString(1))) {
                 Log.w(TAG, "No table for group");
                 return null;
             }
@@ -187,9 +218,21 @@ public class DBHelper extends SQLiteOpenHelper {
         }
     }
 
+    /**
+     * Adds a page to a folder. The image file is already on disk at this point, so if the folder
+     * cannot be found (e.g. it was renamed while a screen still held the old name, or the name was
+     * lost when the process was killed) a folder is created for the page instead of dropping it.
+     */
     public void addGroupDoc(String name, String path, String img_name, String note) {
         SQLiteDatabase writableDatabase = getWritableDatabase();
         GroupRef group = findGroup(writableDatabase, name);
+        if (group == null) {
+            Log.w(TAG, "Folder not found; creating one so the page is not lost");
+            String groupName = isValidGroupName(name) ? name : "Scanny" + Constant.getDateTime("_ddMMHHmmss");
+            groupName = createGroup(new DBModel(groupName, Constant.getDateTime("yyyy-MM-dd  hh:mm a"), path, Constant.current_tag));
+            writableDatabase = getWritableDatabase();
+            group = findGroup(writableDatabase, groupName);
+        }
         if (group != null) {
             ContentValues contentValues = new ContentValues();
             contentValues.put(KEY_IMG_PATH, path);
@@ -342,7 +385,7 @@ public class DBHelper extends SQLiteOpenHelper {
         } finally {
             cursor.close();
         }
-        if (!stillUsed) {
+        if (!stillUsed && !isReservedTable(group.table)) {
             db.execSQL("DROP TABLE IF EXISTS " + quote(group.table));
         }
     }
