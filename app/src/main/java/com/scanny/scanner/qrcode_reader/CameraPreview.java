@@ -12,7 +12,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 
-import org.bouncycastle.crypto.tls.CipherSuite;
 
 import java.util.List;
 
@@ -155,7 +154,7 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
     }
 
     private Point convertSizeToLandscapeOrientation(Point point) {
-        if (getDisplayOrientation() % CipherSuite.TLS_DHE_PSK_WITH_NULL_SHA256 == 0) {
+        if (getDisplayOrientation() % 180 == 0) {
             return point;
         }
         return new Point(point.y, point.x);
@@ -163,7 +162,7 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
 
     private void setViewSize(int i, int i2) {
         ViewGroup.LayoutParams layoutParams = getLayoutParams();
-        if (getDisplayOrientation() % CipherSuite.TLS_DHE_PSK_WITH_NULL_SHA256 != 0) {
+        if (getDisplayOrientation() % 180 != 0) {
             int i3 = i2;
             i2 = i;
             i = i3;
@@ -200,7 +199,7 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
             if (rotation == 1) {
                 i = 90;
             } else if (rotation == 2) {
-                i = CipherSuite.TLS_DHE_PSK_WITH_NULL_SHA256;
+                i = 180;
             } else if (rotation == 3) {
                 i = 270;
             }

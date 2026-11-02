@@ -57,6 +57,8 @@
     <color name="ucrop_color_toolbar_widget">@color/black</color>
     <color name="et_text_color">@color/black</color>
     <color name="text_color_white">@color/white</color>
+    <!-- Page-number pill behind white text (was imagepicker_grey from the removed ImagePicker library). -->
+    <color name="page_indicator_bg">#99000000</color>
     <!--    <color name="ucrop_color_black">#000</color>-->
     <!--    <color name="ucrop_color_white">#FFF</color>-->
 

@@ -34,7 +34,6 @@ import com.scanny.scanner.qrcode_generate.Contents;
 import com.scanny.scanner.qrcode_generate.Intents;
 import com.scanny.scanner.qrcode_generate.QRCodeEncoder;
 
-import org.bouncycastle.crypto.tls.CipherSuite;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -252,7 +251,7 @@ public class QRGenerateActivity extends BaseActivity implements View.OnClickList
             textView.setTypeface(createFromAsset);
             textView.setTextColor(getResources().getColor(R.color.selected_txt_color));
             textView.setGravity(16);
-            textView.setPadding(60, 35, CipherSuite.TLS_DH_RSA_WITH_AES_128_GCM_SHA256, 35);
+            textView.setPadding(60, 35, 160, 35);
             return textView;
         }
     }

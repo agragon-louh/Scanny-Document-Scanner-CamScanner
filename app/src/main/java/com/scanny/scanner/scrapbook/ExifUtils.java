@@ -5,7 +5,6 @@ import android.media.ExifInterface;
 import android.os.Build;
 import android.text.TextUtils;
 
-import org.bouncycastle.crypto.tls.CipherSuite;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -30,7 +29,7 @@ public class ExifUtils {
             }
             int parseInt = Integer.parseInt(attribute);
             if (parseInt == 3) {
-                return CipherSuite.TLS_DHE_PSK_WITH_NULL_SHA256;
+                return 180;
             }
             if (parseInt == 6) {
                 return 90;
@@ -48,7 +47,7 @@ public class ExifUtils {
         try {
             int attributeInt = new ExifInterface(str).getAttributeInt(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, 0);
             if (attributeInt == 3) {
-                return CipherSuite.TLS_DHE_PSK_WITH_NULL_SHA256;
+                return 180;
             }
             if (attributeInt == 6) {
                 return 90;

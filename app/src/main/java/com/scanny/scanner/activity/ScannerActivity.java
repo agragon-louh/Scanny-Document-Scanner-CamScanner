@@ -60,7 +60,6 @@ import com.scanny.scanner.utils.AdsUtils;
 import com.yalantis.ucrop.UCrop;
 import com.yalantis.ucrop.util.FileUtils;
 
-import org.bouncycastle.crypto.tls.CipherSuite;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -181,7 +180,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
         try {
             int attributeInt = new ExifInterface(new File(str).getAbsolutePath()).getAttributeInt(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, 1);
             if (attributeInt == 3) {
-                return CipherSuite.TLS_DHE_PSK_WITH_NULL_SHA256;
+                return 180;
             }
             if (attributeInt == 6) {
                 return 90;
