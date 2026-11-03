@@ -160,6 +160,9 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
     @Override
     public void onCreate(Bundle bundle) {
         super.onCreate(bundle);
+        if (restartIfStateLost()) {
+            return;
+        }
         setContentView(R.layout.activity_group_document);
         groupDocumentActivity = this;
 
@@ -298,10 +301,9 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
             while (it.hasNext()) {
                 Image next = it.next();
                 if (Build.VERSION.SDK_INT >= 29) {
-                    Glide.with(getApplicationContext()).asBitmap().load(next.getUri()).into(new SimpleTarget<Bitmap>() {
+                    Glide.with(getApplicationContext()).asBitmap().load(next.getUri()).downsample(com.bumptech.glide.load.resource.bitmap.DownsampleStrategy.CENTER_INSIDE).into(new SimpleTarget<Bitmap>(Constant.MAX_IMPORT_SIDE, Constant.MAX_IMPORT_SIDE) {
                         public void onResourceReady(Bitmap bitmap, Transition<? super Bitmap> transition) {
                             if (Constant.original != null) {
-                                Constant.original.recycle();
                                 System.gc();
                             }
                             Constant.original = bitmap;
@@ -313,7 +315,6 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                     Glide.with(getApplicationContext()).asBitmap().load(next.getPath()).into(new SimpleTarget<Bitmap>() {
                         public void onResourceReady(Bitmap bitmap, Transition<? super Bitmap> transition) {
                             if (Constant.original != null) {
-                                Constant.original.recycle();
                                 System.gc();
                             }
                             Constant.original = bitmap;
@@ -439,7 +440,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                 iv_confirm_pass_show.setVisibility(View.GONE);
                 iv_confirm_pass_hide.setVisibility(View.VISIBLE);
                 et_confirm_pass.setTransformationMethod(new HideReturnsTransformationMethod());
-                et_confirm_pass.setSelection(et_enter_pass.getText().length());
+                et_confirm_pass.setSelection(et_confirm_pass.getText().length());
             }
         });
         iv_confirm_pass_hide.setOnClickListener(new View.OnClickListener() {
@@ -448,7 +449,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                 iv_confirm_pass_show.setVisibility(View.VISIBLE);
                 iv_confirm_pass_hide.setVisibility(View.GONE);
                 et_confirm_pass.setTransformationMethod(new PasswordTransformationMethod());
-                et_confirm_pass.setSelection(et_enter_pass.getText().length());
+                et_confirm_pass.setSelection(et_confirm_pass.getText().length());
             }
         });
 
@@ -766,13 +767,8 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
             Iterator<DBModel> it = groupDocs.iterator();
             while (it.hasNext()) {
                 DBModel next = it.next();
-                try {
-                    BitmapFactory.Options options = new BitmapFactory.Options();
-                    options.inPreferredConfig = Bitmap.Config.ARGB_8888;
-                    arrayList.add(BitmapFactory.decodeStream(new FileInputStream(next.getGroup_doc_img()), (Rect) null, options));
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+                // Paths, not bitmaps: pages are decoded one at a time while the PDF is written.
+                arrayList.add(next.getGroup_doc_img());
             }
             if (arrayList.size() > 0) {
                 isDocExists = true;
@@ -793,7 +789,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
             super.onPostExecute(str);
             if (isDocExists) {
                 if (pdfFailed(pdfFile)) {
-                    progressDialog.dismiss();
+                    dismissSafely(progressDialog);
                     return;
                 }
                 pdfUri = BaseActivity.getURIFromFile(pdfFile.getPath(), GroupDocumentActivity.this);
@@ -801,7 +797,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                 Constant.IdentifyActivity = "PDFViewerActivity2";
                 NavigationUtils.jumpNextActivity(GroupDocumentActivity.this);
             }
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
         }
     }
 
@@ -824,7 +820,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
 
         @Override
         public String doInBackground(String... strArr) {
-            GroupDocumentActivity.currentGroupList.clear();
+            // Assign a new list; clearing the one the visible adapter holds from this thread crashed RecyclerView.
             GroupDocumentActivity.currentGroupList = dataBaseHelper.getGroupDocs(GroupDocumentActivity.current_group);
             return null;
         }
@@ -843,7 +839,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                 ly_doc_camera.setVisibility(View.VISIBLE);
 //                Toast.makeText(getApplicationContext(), "Something Went Wrong...", Toast.LENGTH_SHORT).show();
             }
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
         }
     }
 
@@ -884,13 +880,8 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                 Iterator<DBModel> it = groupDocs.iterator();
                 while (it.hasNext()) {
                     DBModel next = it.next();
-                    try {
-                        BitmapFactory.Options options = new BitmapFactory.Options();
-                        options.inPreferredConfig = Bitmap.Config.ARGB_8888;
-                        arrayList.add(BitmapFactory.decodeStream(new FileInputStream(next.getGroup_doc_img()), (Rect) null, options));
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+                    // Paths, not bitmaps: pages are decoded one at a time while the PDF is written.
+                    arrayList.add(next.getGroup_doc_img());
                 }
                 if (inputType.equals(PdfObject.TEXT_PDFDOCENCODING)) {
                     pdfFile = createPDFfromBitmap(GroupDocumentActivity.current_group, arrayList, "temp");
@@ -909,7 +900,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
         public void onPostExecute(String str) {
             super.onPostExecute(str);
             if (pdfFailed(pdfFile)) {
-                progressDialog.dismiss();
+                dismissSafely(progressDialog);
                 return;
             }
             Uri uRIFromFile = BaseActivity.getURIFromFile(pdfFile.getPath(), GroupDocumentActivity.this);
@@ -924,7 +915,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                 intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 Intent createChooser = Intent.createChooser(intent, (CharSequence) null);
                 if (progressDialog.isShowing()) {
-                    progressDialog.dismiss();
+                    dismissSafely(progressDialog);
                 }
                 startActivity(createChooser);
                 return;
@@ -938,7 +929,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
             intent2.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             Intent createChooser2 = Intent.createChooser(intent2, (CharSequence) null);
             if (progressDialog.isShowing()) {
-                progressDialog.dismiss();
+                dismissSafely(progressDialog);
             }
             startActivity(createChooser2);
         }
@@ -993,7 +984,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
         @Override
         public void onPostExecute(String str) {
             super.onPostExecute(str);
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
             Toast.makeText(GroupDocumentActivity.this, "Save Successfully", Toast.LENGTH_SHORT).show();
         }
     }
@@ -1035,7 +1026,7 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
         @Override
         public void onPostExecute(String str) {
             super.onPostExecute(str);
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
             if (!pdfFailed(pdfFile)) {
                 Toast.makeText(GroupDocumentActivity.this, "Saved as " + pdfFile.getName(), Toast.LENGTH_SHORT).show();
             }

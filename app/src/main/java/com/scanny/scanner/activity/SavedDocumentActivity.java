@@ -85,6 +85,10 @@ public class SavedDocumentActivity extends BaseActivity implements View.OnClickL
     @Override
     public void onCreate(Bundle bundle) {
         super.onCreate(bundle);
+        if (restartIfStateLost()) {
+            return;
+        }
+        blockScreenCapture();
         setContentView(R.layout.activity_saved_document);
         dataBaseHelper = new DBHelper(this);
 
@@ -161,7 +165,6 @@ public class SavedDocumentActivity extends BaseActivity implements View.OnClickL
                 Matrix matrix = new Matrix();
                 matrix.postRotate(90.0f);
                 Bitmap createBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
-                Constant.original.recycle();
                 System.gc();
                 Constant.original = createBitmap;
                 iv_preview_saved.setImageBitmap(Constant.original);

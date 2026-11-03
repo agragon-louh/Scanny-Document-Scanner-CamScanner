@@ -38,6 +38,10 @@ public class ImageToTextActivity extends BaseActivity implements View.OnClickLis
     @Override
     public void onCreate(Bundle bundle) {
         super.onCreate(bundle);
+        if (restartIfStateLost()) {
+            return;
+        }
+        blockScreenCapture();
         setContentView(R.layout.activity_img_to_text);
 
         init();
@@ -97,14 +101,38 @@ public class ImageToTextActivity extends BaseActivity implements View.OnClickLis
             @Override
             public void run() {
                 TextRecognizer build = new TextRecognizer.Builder(getApplicationContext()).build();
-                if (!build.isOperational()) {
-                    Log.e(ImageToTextActivity.TAG, "Detector dependencies not loaded yet");
-                    return;
+                SparseArray<TextBlock> result = null;
+                String error = null;
+                try {
+                    if (bitmap == null) {
+                        error = "No image to read";
+                    } else if (!build.isOperational()) {
+                        // The OCR model is downloaded by Play services on first use. Returning here
+                        // used to leave the non-cancelable progress dialog up for good.
+                        Log.e(ImageToTextActivity.TAG, "Detector dependencies not loaded yet");
+                        error = "Text recognition is not available yet. Try again in a moment.";
+                    } else {
+                        result = build.detect(new Frame.Builder().setBitmap(bitmap).build());
+                    }
+                } catch (RuntimeException e) {
+                    Log.e(ImageToTextActivity.TAG, "OCR failed", e);
+                    error = "Could not read text from this image";
+                } finally {
+                    build.release();
                 }
-                final SparseArray<TextBlock> detect = build.detect(new Frame.Builder().setBitmap(bitmap).build());
+                final SparseArray<TextBlock> detect = result;
+                final String message = error;
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
+                        if (isFinishing() || isDestroyed()) {
+                            return;
+                        }
+                        if (detect == null) {
+                            dismissSafely(progressDialog);
+                            Toast.makeText(ImageToTextActivity.this, message, Toast.LENGTH_LONG).show();
+                            return;
+                        }
                         if (detect.size() != 0) {
                             StringBuilder sb = new StringBuilder();
                             for (int i = 0; i < detect.size(); i++) {
@@ -115,7 +143,7 @@ public class ImageToTextActivity extends BaseActivity implements View.OnClickLis
                         } else {
                             tv_ocr_txt.setText("No Text Found...");
                         }
-                        progressDialog.dismiss();
+                        dismissSafely(progressDialog);
                     }
                 });
             }

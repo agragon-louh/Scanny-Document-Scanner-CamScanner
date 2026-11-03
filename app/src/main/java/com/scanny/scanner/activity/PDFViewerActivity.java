@@ -40,6 +40,7 @@ public class PDFViewerActivity extends BaseActivity {
     @Override
     public void onCreate(Bundle bundle) {
         super.onCreate(bundle);
+        blockScreenCapture();
         setContentView(R.layout.activity_pdfviewer);
         init();
     }

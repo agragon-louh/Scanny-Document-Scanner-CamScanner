@@ -31,7 +31,7 @@ public final class WatermarkUtil {
     public static void applyTiledText(Context context, ImageView imageView, String text, int fontRes,
                                       int color, int alpha, float textSizeSp, float rotation) {
         Drawable drawable = imageView.getDrawable();
-        if (!(drawable instanceof BitmapDrawable) || text == null || text.isEmpty()) {
+        if (!(drawable instanceof BitmapDrawable) || text == null || text.trim().isEmpty()) {
             return;
         }
         Bitmap source = ((BitmapDrawable) drawable).getBitmap();
@@ -60,8 +60,11 @@ public final class WatermarkUtil {
 
         Rect bounds = new Rect();
         paint.getTextBounds(text, 0, text.length(), bounds);
-        int stepX = Math.max(1, bounds.width() + bounds.height() * 2);
-        int stepY = Math.max(1, bounds.height() * 4);
+        // Never step by less than the text size: whitespace-only text has empty bounds, and a
+        // 1 px step meant hundreds of millions of drawText calls on the UI thread (ANR).
+        int minStep = Math.max(1, (int) paint.getTextSize());
+        int stepX = Math.max(minStep, bounds.width() + bounds.height() * 2);
+        int stepY = Math.max(minStep, bounds.height() * 4);
         int diagonal = (int) Math.hypot(result.getWidth(), result.getHeight());
 
         canvas.save();

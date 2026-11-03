@@ -5,6 +5,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Log;
 import android.widget.Toast;
@@ -12,6 +13,8 @@ import android.widget.Toast;
 import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.DBModel;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 
 /**
@@ -92,8 +95,12 @@ public class DBHelper extends SQLiteOpenHelper {
         return true;
     }
 
+    /** Page images live under the app's external files dir; only files in there are deleted. */
+    private final File imageRoot;
+
     public DBHelper(Context context) {
         super(context, DATABASE_NAME, (SQLiteDatabase.CursorFactory) null, DATABASE_VERSION);
+        imageRoot = context.getExternalFilesDir(null);
     }
 
     @Override
@@ -390,28 +397,120 @@ public class DBHelper extends SQLiteOpenHelper {
         }
     }
 
+    private static ArrayList<String> imagePaths(SQLiteDatabase db, String table, String where, String[] args) {
+        ArrayList<String> paths = new ArrayList<>();
+        Cursor cursor = db.rawQuery("SELECT " + KEY_IMG_PATH + " FROM " + quote(table) + (where == null ? "" : " WHERE " + where), args);
+        try {
+            while (cursor.moveToNext()) {
+                if (!cursor.isNull(0)) {
+                    paths.add(cursor.getString(0));
+                }
+            }
+        } finally {
+            cursor.close();
+        }
+        return paths;
+    }
+
+    /** True while any folder still has a page pointing at {@code path}. Errs on the side of true. */
+    private static boolean isImageReferenced(SQLiteDatabase db, String path) {
+        Cursor tables = db.rawQuery("SELECT DISTINCT tbl FROM alldocs WHERE tbl IS NOT NULL", null);
+        try {
+            while (tables.moveToNext()) {
+                String table = tables.getString(0);
+                if (isReservedTable(table)) {
+                    continue;
+                }
+                try {
+                    Cursor cursor = db.rawQuery("SELECT 1 FROM " + quote(table) + " WHERE " + KEY_IMG_PATH + " = ? LIMIT 1", new String[]{path});
+                    try {
+                        if (cursor.moveToFirst()) {
+                            return true;
+                        }
+                    } finally {
+                        cursor.close();
+                    }
+                } catch (SQLiteException e) {
+                    return true;
+                }
+            }
+        } finally {
+            tables.close();
+        }
+        return false;
+    }
+
+    /**
+     * Of {@code paths}, returns the image files that no page references any more and that lie
+     * inside the app's own storage. Deleting a page used to leave its image (scanned IDs,
+     * signatures) on disk for good.
+     */
+    private ArrayList<File> unreferencedImages(SQLiteDatabase db, ArrayList<String> paths) {
+        ArrayList<File> files = new ArrayList<>();
+        if (imageRoot == null) {
+            return files;
+        }
+        try {
+            String root = imageRoot.getCanonicalPath() + File.separator;
+            for (String path : paths) {
+                File file = new File(path);
+                if (file.getCanonicalPath().startsWith(root) && !files.contains(file) && !isImageReferenced(db, path)) {
+                    files.add(file);
+                }
+            }
+        } catch (IOException e) {
+            Log.w(TAG, "Cannot resolve image paths", e);
+            files.clear();
+        }
+        return files;
+    }
+
+    private static void deleteFiles(ArrayList<File> files) {
+        for (File file : files) {
+            if (file.exists() && !file.delete()) {
+                Log.w(TAG, "Cannot delete " + file.getName());
+            }
+        }
+    }
+
     public void deleteGroup(String str) {
         SQLiteDatabase writableDatabase = getWritableDatabase();
+        ArrayList<File> orphans = new ArrayList<>();
         writableDatabase.beginTransaction();
         try {
             GroupRef group = findGroup(writableDatabase, str);
             if (group != null) {
+                ArrayList<String> paths = imagePaths(writableDatabase, group.table, null, null);
                 deleteGroup(writableDatabase, group);
+                orphans = unreferencedImages(writableDatabase, paths);
             }
             writableDatabase.setTransactionSuccessful();
         } finally {
             writableDatabase.endTransaction();
             writableDatabase.close();
         }
+        // Only after the rows are gone for good.
+        deleteFiles(orphans);
     }
 
     public void deleteSingleDoc(String str, String str2) {
         SQLiteDatabase writableDatabase = getWritableDatabase();
-        GroupRef group = findGroup(writableDatabase, str);
-        if (group != null) {
-            writableDatabase.delete(quote(group.table), "imgname = ?", new String[]{String.valueOf(str2)});
+        ArrayList<File> orphans = new ArrayList<>();
+        writableDatabase.beginTransaction();
+        try {
+            GroupRef group = findGroup(writableDatabase, str);
+            if (group != null) {
+                String[] args = new String[]{String.valueOf(str2)};
+                ArrayList<String> paths = imagePaths(writableDatabase, group.table, "imgname = ?", args);
+                writableDatabase.delete(quote(group.table), "imgname = ?", args);
+                orphans = unreferencedImages(writableDatabase, paths);
+            }
+            writableDatabase.setTransactionSuccessful();
+        } finally {
+            writableDatabase.endTransaction();
+            writableDatabase.close();
         }
-        writableDatabase.close();
+        deleteFiles(orphans);
     }
 
     /**
@@ -453,15 +552,28 @@ public class DBHelper extends SQLiteOpenHelper {
         writableDatabase.close();
     }
 
+    /** Points a page at its new (edited/rotated) image and deletes the old image if now unused. */
     public void updateGroupListDoc(String str, String str2, String str3) {
         SQLiteDatabase writableDatabase = getWritableDatabase();
-        GroupRef group = findGroup(writableDatabase, str);
-        if (group != null) {
-            ContentValues contentValues = new ContentValues();
-            contentValues.put(KEY_IMG_PATH, str3);
-            writableDatabase.update(quote(group.table), contentValues, "imgname = ?", new String[]{String.valueOf(str2)});
+        ArrayList<File> orphans = new ArrayList<>();
+        writableDatabase.beginTransaction();
+        try {
+            GroupRef group = findGroup(writableDatabase, str);
+            if (group != null) {
+                String[] args = new String[]{String.valueOf(str2)};
+                ArrayList<String> oldPaths = imagePaths(writableDatabase, group.table, "imgname = ?", args);
+                oldPaths.remove(str3);
+                ContentValues contentValues = new ContentValues();
+                contentValues.put(KEY_IMG_PATH, str3);
+                writableDatabase.update(quote(group.table), contentValues, "imgname = ?", args);
+                orphans = unreferencedImages(writableDatabase, oldPaths);
+            }
+            writableDatabase.setTransactionSuccessful();
+        } finally {
+            writableDatabase.endTransaction();
+            writableDatabase.close();
         }
-        writableDatabase.close();
+        deleteFiles(orphans);
     }
 
     public void updateGroupListDocNote(String str, String str2, String str3) {

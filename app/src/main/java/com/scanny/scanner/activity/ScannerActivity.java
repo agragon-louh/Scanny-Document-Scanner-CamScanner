@@ -84,6 +84,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
     public String current_docs_name;
     public DBHelper dbHelper;
     public boolean isBackSide = false;
+    private boolean cameraPermissionRequested = false;
     public CropImageView iv_card_crop;
     public PhotoView iv_card_filter;
     public ImageView iv_done;
@@ -197,6 +198,20 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
         }
     }
 
+    /**
+     * Decodes a captured JPEG straight to half size. It used to be decoded at full size and then
+     * scaled down, which needs about 200 MB on 48-50 MP cameras and ran out of memory.
+     */
+    private static Bitmap decodeHalfSize(byte[] data) throws IOException {
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inSampleSize = 2;
+        Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length, options);
+        if (bitmap == null) {
+            throw new IOException("Cannot decode the photo");
+        }
+        return bitmap;
+    }
+
     public static Bitmap scalePreserveRatio(Bitmap bitmap, int i, int i2) {
         if (i2 <= 0 || i <= 0 || bitmap == null) {
             return bitmap;
@@ -232,10 +247,15 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
         super.onResume();
         if (ContextCompat.checkSelfPermission(this, "android.permission.CAMERA") == PackageManager.PERMISSION_GRANTED) {
             cameraView.open();
-        } else if (ActivityCompat.shouldShowRequestPermissionRationale(this, "android.permission.CAMERA")) {
-            ConfirmationDialogFragment.newInstance(R.string.camera_permission_confirmation, new String[]{"android.permission.CAMERA"}, 1, R.string.camera_permission_not_granted).show(getSupportFragmentManager(), FRAGMENT_DIALOG);
-        } else {
-            ActivityCompat.requestPermissions(this, new String[]{"android.permission.CAMERA"}, 1);
+        } else if (!cameraPermissionRequested) {
+            // Ask once per screen. Asking on every resume looped forever once the permission was
+            // permanently denied (the system dialog closes at once, which resumes this screen).
+            cameraPermissionRequested = true;
+            if (ActivityCompat.shouldShowRequestPermissionRationale(this, "android.permission.CAMERA")) {
+                ConfirmationDialogFragment.newInstance(R.string.camera_permission_confirmation, new String[]{"android.permission.CAMERA"}, 1, R.string.camera_permission_not_granted).show(getSupportFragmentManager(), FRAGMENT_DIALOG);
+            } else {
+                ActivityCompat.requestPermissions(this, new String[]{"android.permission.CAMERA"}, 1);
+            }
         }
 
         ContextCompat.registerReceiver(ScannerActivity.this, broadcastReceiver, new IntentFilter(getPackageName() + ".ScannerGalleryActivity"), ContextCompat.RECEIVER_NOT_EXPORTED);
@@ -254,6 +274,9 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
     @Override
     public void onDestroy() {
         super.onDestroy();
+        if (cameraView != null) {
+            cameraView.destroy();
+        }
 
         if (broadcastReceiver != null) {
             try {
@@ -267,6 +290,10 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
     @Override
     public void onCreate(Bundle bundle) {
         super.onCreate(bundle);
+        if (restartIfStateLost()) {
+            return;
+        }
+        blockScreenCapture();
         getWindow().setFlags(1024, 1024);
         setContentView(R.layout.activity_scanner);
         dbHelper = new DBHelper(this);
@@ -289,7 +316,8 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
         v_idcard = findViewById(R.id.v_idcard);
         v_photo = findViewById(R.id.v_photo);
         cameraView = (CameraView) findViewById(R.id.cameraView);
-        cameraView.setLifecycleOwner(this);
+        // No setLifecycleOwner(): CameraView would then request the permission itself on every
+        // resume. The camera is opened and closed in onResume()/onPause() instead.
         rl_book_view = (RelativeLayout) findViewById(R.id.rl_book_view);
         rl_idcard_view = (RelativeLayout) findViewById(R.id.rl_idcard_view);
         tv_id_card = (TextView) findViewById(R.id.tv_id_card);
@@ -332,8 +360,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                             FileOutputStream fileOutputStream = new FileOutputStream(file);
                             fileOutputStream.write(data);
                             fileOutputStream.close();
-                            Bitmap decodeByteArray = BitmapFactory.decodeByteArray(data, 0, data.length);
-                            Bitmap scalePreserveRatio = scalePreserveRatio(decodeByteArray, decodeByteArray.getWidth() / 2, decodeByteArray.getHeight() / 2);
+                            Bitmap scalePreserveRatio = decodeHalfSize(data);
                             int cameraPhotoOrientation = getCameraPhotoOrientation(file.getPath());
                             Matrix matrix = new Matrix();
                             matrix.postRotate((float) cameraPhotoOrientation);
@@ -352,8 +379,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                                 FileOutputStream fileOutputStream2 = new FileOutputStream(file2);
                                 fileOutputStream2.write(data);
                                 fileOutputStream2.close();
-                                Bitmap decodeByteArray2 = BitmapFactory.decodeByteArray(data, 0, data.length);
-                                Bitmap scalePreserveRatio2 = scalePreserveRatio(decodeByteArray2, decodeByteArray2.getWidth() / 2, decodeByteArray2.getHeight() / 2);
+                                Bitmap scalePreserveRatio2 = decodeHalfSize(data);
                                 int cameraPhotoOrientation2 = getCameraPhotoOrientation(file2.getPath());
                                 Matrix matrix2 = new Matrix();
                                 matrix2.postRotate((float) cameraPhotoOrientation2);
@@ -373,8 +399,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                                 FileOutputStream fileOutputStream3 = new FileOutputStream(file3);
                                 fileOutputStream3.write(data);
                                 fileOutputStream3.close();
-                                Bitmap decodeByteArray3 = BitmapFactory.decodeByteArray(data, 0, data.length);
-                                Bitmap scalePreserveRatio3 = scalePreserveRatio(decodeByteArray3, decodeByteArray3.getWidth() / 2, decodeByteArray3.getHeight() / 2);
+                                Bitmap scalePreserveRatio3 = decodeHalfSize(data);
                                 int cameraPhotoOrientation3 = getCameraPhotoOrientation(file3.getPath());
                                 Matrix matrix3 = new Matrix();
                                 matrix3.postRotate((float) cameraPhotoOrientation3);
@@ -394,8 +419,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                             FileOutputStream fileOutputStream4 = new FileOutputStream(file4);
                             fileOutputStream4.write(data);
                             fileOutputStream4.close();
-                            Bitmap decodeByteArray4 = BitmapFactory.decodeByteArray(data, 0, data.length);
-                            Bitmap scalePreserveRatio4 = scalePreserveRatio(decodeByteArray4, decodeByteArray4.getWidth() / 2, decodeByteArray4.getHeight() / 2);
+                            Bitmap scalePreserveRatio4 = decodeHalfSize(data);
                             int cameraPhotoOrientation4 = getCameraPhotoOrientation(file4.getPath());
                             Matrix matrix4 = new Matrix();
                             matrix4.postRotate((float) cameraPhotoOrientation4);
@@ -418,8 +442,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                             FileOutputStream fileOutputStream5 = new FileOutputStream(file5);
                             fileOutputStream5.write(data);
                             fileOutputStream5.close();
-                            Bitmap decodeByteArray5 = BitmapFactory.decodeByteArray(data, 0, data.length);
-                            Bitmap scalePreserveRatio5 = scalePreserveRatio(decodeByteArray5, decodeByteArray5.getWidth() / 2, decodeByteArray5.getHeight() / 2);
+                            Bitmap scalePreserveRatio5 = decodeHalfSize(data);
                             int cameraPhotoOrientation5 = getCameraPhotoOrientation(file5.getPath());
                             Matrix matrix5 = new Matrix();
                             matrix5.postRotate((float) cameraPhotoOrientation5);
@@ -561,12 +584,18 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
     }
 
     @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 1 && (grantResults.length == 0 || grantResults[0] != PackageManager.PERMISSION_GRANTED)) {
+            Toast.makeText(this, R.string.camera_permission_not_granted, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
     public void onPause() {
-        new Handler().postDelayed(new Runnable() {
-            public void run() {
-                cameraView.close();
-            }
-        }, 200);
+        // Closed right away: a delayed close could shut the camera that onResume() had just
+        // reopened, leaving a black preview.
+        cameraView.close();
         super.onPause();
     }
 
@@ -937,7 +966,6 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                 Matrix matrix = new Matrix();
                 matrix.postRotate(90.0f);
                 Bitmap createBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
-                Constant.IDCardBitmap.recycle();
                 System.gc();
                 Constant.IDCardBitmap = createBitmap;
                 iv_card_crop.setImageToCrop(Constant.IDCardBitmap);
@@ -967,11 +995,10 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
             while (it.hasNext()) {
                 Image next = it.next();
                 if (Build.VERSION.SDK_INT >= 29) {
-                    Glide.with(getApplicationContext()).asBitmap().load(next.getUri()).into(new SimpleTarget<Bitmap>() {
+                    Glide.with(getApplicationContext()).asBitmap().load(next.getUri()).downsample(com.bumptech.glide.load.resource.bitmap.DownsampleStrategy.CENTER_INSIDE).into(new SimpleTarget<Bitmap>(Constant.MAX_IMPORT_SIDE, Constant.MAX_IMPORT_SIDE) {
                         @Override
                         public void onResourceReady(Bitmap bitmap, Transition<? super Bitmap> transition) {
                             if (Constant.original != null) {
-                                Constant.original.recycle();
                                 System.gc();
                             }
                             Constant.original = bitmap;
@@ -984,7 +1011,6 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                         @Override
                         public void onResourceReady(Bitmap bitmap, Transition<? super Bitmap> transition) {
                             if (Constant.original != null) {
-                                Constant.original.recycle();
                                 System.gc();
                             }
                             Constant.original = bitmap;
@@ -1028,7 +1054,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
 
     public void dismissProgressDialog() {
         if (progressDialog.isShowing()) {
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
         }
     }
 
@@ -1158,7 +1184,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
         @Override
         public void onPostExecute(Bitmap bitmap) {
             super.onPostExecute(bitmap);
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
             if (saveFailed) {
                 Toast.makeText(ScannerActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
                 return;

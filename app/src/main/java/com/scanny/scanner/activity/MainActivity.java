@@ -543,10 +543,9 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
             while (it.hasNext()) {
                 Image next = it.next();
                 if (Build.VERSION.SDK_INT >= 29) {
-                    Glide.with(getApplicationContext()).asBitmap().load(next.getUri()).into(new SimpleTarget<Bitmap>() {
+                    Glide.with(getApplicationContext()).asBitmap().load(next.getUri()).downsample(com.bumptech.glide.load.resource.bitmap.DownsampleStrategy.CENTER_INSIDE).into(new SimpleTarget<Bitmap>(Constant.MAX_IMPORT_SIDE, Constant.MAX_IMPORT_SIDE) {
                         public void onResourceReady(Bitmap bitmap, Transition<? super Bitmap> transition) {
                             if (Constant.original != null) {
-                                Constant.original.recycle();
                                 System.gc();
                             }
                             Constant.current_camera_view = "Document";
@@ -559,7 +558,6 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                     Glide.with(getApplicationContext()).asBitmap().load(next.getPath()).into(new SimpleTarget<Bitmap>() {
                         public void onResourceReady(Bitmap bitmap, Transition<? super Bitmap> transition) {
                             if (Constant.original != null) {
-                                Constant.original.recycle();
                                 System.gc();
                             }
                             Constant.current_camera_view = "Document";
@@ -915,7 +913,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                 iv_confirm_pswrd_show.setVisibility(View.GONE);
                 iv_confirm_pswrd_hide.setVisibility(View.VISIBLE);
                 et_confirm_pswrd.setTransformationMethod(new HideReturnsTransformationMethod());
-                et_confirm_pswrd.setSelection(et_enter_pswrd.getText().length());
+                et_confirm_pswrd.setSelection(et_confirm_pswrd.getText().length());
             }
         });
         iv_confirm_pswrd_hide.setOnClickListener(new View.OnClickListener() {
@@ -924,7 +922,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                 iv_confirm_pswrd_show.setVisibility(View.VISIBLE);
                 iv_confirm_pswrd_hide.setVisibility(View.GONE);
                 et_confirm_pswrd.setTransformationMethod(new PasswordTransformationMethod());
-                et_confirm_pswrd.setSelection(et_enter_pswrd.getText().length());
+                et_confirm_pswrd.setSelection(et_confirm_pswrd.getText().length());
             }
         });
 
@@ -1097,13 +1095,8 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                 Iterator<DBModel> it2 = groupDocs.iterator();
                 while (it2.hasNext()) {
                     DBModel next = it2.next();
-                    try {
-                        BitmapFactory.Options options = new BitmapFactory.Options();
-                        options.inPreferredConfig = Bitmap.Config.ARGB_8888;
-                        arrayList.add(BitmapFactory.decodeStream(new FileInputStream(next.getGroup_doc_img()), (Rect) null, options));
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+                    // Paths, not bitmaps: pages are decoded one at a time while the PDF is written.
+                    arrayList.add(next.getGroup_doc_img());
                 }
                 if (arrayList.size() > 0) {
                     File pdf = createPDFfromBitmap(group_name, arrayList, "temp");
@@ -1119,7 +1112,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         public void onPostExecute(String str) {
             super.onPostExecute(str);
             if (allPDFList.isEmpty()) {
-                progressDialog.dismiss();
+                dismissSafely(progressDialog);
                 pdfFailed(null);
                 return;
             }
@@ -1130,7 +1123,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
             intent.putExtra("android.intent.extra.SUBJECT", "Share All");
             intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             Intent createChooser = Intent.createChooser(intent, (CharSequence) null);
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
             startActivity(createChooser);
         }
     }
@@ -1221,7 +1214,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                     tv_empty.setText(getResources().getString(R.string.all_docs_empty));
                 }
             }
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
         }
     }
 
@@ -1275,13 +1268,8 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
             Iterator<DBModel> it = groupDocs.iterator();
             while (it.hasNext()) {
                 DBModel next = it.next();
-                try {
-                    BitmapFactory.Options options = new BitmapFactory.Options();
-                    options.inPreferredConfig = Bitmap.Config.ARGB_8888;
-                    arrayList.add(BitmapFactory.decodeStream(new FileInputStream(next.getGroup_doc_img()), (Rect) null, options));
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+                // Paths, not bitmaps: pages are decoded one at a time while the PDF is written.
+                arrayList.add(next.getGroup_doc_img());
             }
             if (inputType.equals(PdfObject.TEXT_PDFDOCENCODING)) {
                 pdfFile = createPDFfromBitmap(pdfName, arrayList, "save");
@@ -1294,7 +1282,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         @Override
         public void onPostExecute(String str) {
             super.onPostExecute(str);
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
             if (!pdfFailed(pdfFile)) {
                 Toast.makeText(MainActivity.this, "Saved as " + pdfFile.getName(), Toast.LENGTH_SHORT).show();
             }
@@ -1337,13 +1325,8 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
             Iterator<DBModel> it = groupDocs.iterator();
             while (it.hasNext()) {
                 DBModel next = it.next();
-                try {
-                    BitmapFactory.Options options = new BitmapFactory.Options();
-                    options.inPreferredConfig = Bitmap.Config.ARGB_8888;
-                    arrayList.add(BitmapFactory.decodeStream(new FileInputStream(next.getGroup_doc_img()), (Rect) null, options));
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+                // Paths, not bitmaps: pages are decoded one at a time while the PDF is written.
+                arrayList.add(next.getGroup_doc_img());
             }
             if (inputType.equals(PdfObject.TEXT_PDFDOCENCODING)) {
                 pdfFile = createPDFfromBitmap(group_name, arrayList, "temp");
@@ -1357,7 +1340,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         public void onPostExecute(String str) {
             super.onPostExecute(str);
             if (pdfFailed(pdfFile)) {
-                progressDialog.dismiss();
+                dismissSafely(progressDialog);
                 return;
             }
             Uri uRIFromFile = BaseActivity.getURIFromFile(pdfFile.getPath(), MainActivity.this);
@@ -1372,7 +1355,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                 intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 Intent createChooser = Intent.createChooser(intent, (CharSequence) null);
                 if (progressDialog.isShowing()) {
-                    progressDialog.dismiss();
+                    dismissSafely(progressDialog);
                 }
                 startActivity(createChooser);
                 return;
@@ -1386,7 +1369,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
             intent2.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             Intent createChooser2 = Intent.createChooser(intent2, (CharSequence) null);
             if (progressDialog.isShowing()) {
-                progressDialog.dismiss();
+                dismissSafely(progressDialog);
             }
             startActivity(createChooser2);
         }
@@ -1447,7 +1430,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         @Override
         public void onPostExecute(String str) {
             super.onPostExecute(str);
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
             Toast.makeText(MainActivity.this, "Save Successfully", Toast.LENGTH_SHORT).show();
         }
     }

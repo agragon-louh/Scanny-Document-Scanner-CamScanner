@@ -135,6 +135,10 @@ public class IDCardPreviewActivity extends BaseActivity implements View.OnClickL
     @Override
     public void onCreate(Bundle bundle) {
         super.onCreate(bundle);
+        if (restartIfStateLost()) {
+            return;
+        }
+        blockScreenCapture();
         LocalDisplay.init(this);
         setContentView(R.layout.activity_idcard_preview);
         dbHelper = new DBHelper(this);
@@ -273,7 +277,7 @@ public class IDCardPreviewActivity extends BaseActivity implements View.OnClickL
             while (it.hasNext()) {
                 Image next = it.next();
                 if (Build.VERSION.SDK_INT >= 29) {
-                    Glide.with(getApplicationContext()).asBitmap().load(next.getUri()).into(new SimpleTarget<Bitmap>() {
+                    Glide.with(getApplicationContext()).asBitmap().load(next.getUri()).downsample(com.bumptech.glide.load.resource.bitmap.DownsampleStrategy.CENTER_INSIDE).into(new SimpleTarget<Bitmap>(Constant.MAX_IMPORT_SIDE, Constant.MAX_IMPORT_SIDE) {
                         public void onResourceReady(Bitmap bitmap, Transition<? super Bitmap> transition) {
                             Constant.original = bitmap;
                             stickerHolderView.addStickerView(new ImageStickerConfig(bitmap, StickerConfigInterface.STICKER_TYPE.IMAGE));
@@ -323,6 +327,7 @@ public class IDCardPreviewActivity extends BaseActivity implements View.OnClickL
         boolean saveFailed;
         String current_doc_name;
         String group_date;
+        Bitmap capturedFrame;
         String group_name;
         ProgressDialog progressDialog;
 
@@ -338,12 +343,12 @@ public class IDCardPreviewActivity extends BaseActivity implements View.OnClickL
             progressDialog.setCancelable(false);
             progressDialog.setCanceledOnTouchOutside(false);
             progressDialog.show();
+            capturedFrame = captureView(rl_main);
         }
 
         @Override
         public Bitmap doInBackground(Bitmap... bitmapArr) {
-            finalBitmap = aspectRatioLayout.getDrawingCache();
-            finalBitmap = getMainFrameBitmap(rl_main);
+            finalBitmap = imageBitmap(capturedFrame);
             if (finalBitmap == null) {
                 return null;
             }
@@ -370,7 +375,7 @@ public class IDCardPreviewActivity extends BaseActivity implements View.OnClickL
         @Override
         public void onPostExecute(Bitmap bitmap) {
             super.onPostExecute(bitmap);
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
             if (saveFailed) {
                 Toast.makeText(IDCardPreviewActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
                 return;

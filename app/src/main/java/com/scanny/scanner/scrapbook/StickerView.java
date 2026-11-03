@@ -235,7 +235,6 @@ public class StickerView extends ImageView {
         if (z) {
             Bitmap bitmap = this.stickerPictureCache;
             if (!(bitmap == null || f == 1.0f)) {
-                bitmap.recycle();
                 this.stickerPictureCache = null;
             }
             System.gc();
@@ -765,7 +764,6 @@ public class StickerView extends ImageView {
                     bitmap2 = bitmap;
                 } else {
                     bitmap2 = Bitmap.createScaledBitmap(bitmap, sqrt3, sqrt4, true);
-                    bitmap.recycle();
                 }
             }
             return bitmap2;

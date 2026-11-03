@@ -1,9 +1,6 @@
 package com.scanny.scanner.activity;
 
 import android.app.Dialog;
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.Context;
 import android.content.Intent;
 import android.graphics.drawable.ColorDrawable;
 import android.media.ToneGenerator;
@@ -20,7 +17,6 @@ import com.google.zxing.Result;
 import com.scanny.scanner.R;
 import com.scanny.scanner.qrcode_reader.ZXingScannerView;
 
-import org.bouncycastle.i18n.TextBundle;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -31,6 +27,7 @@ public class QRReaderActivity extends BaseActivity implements ZXingScannerView.R
     public String barcode_result;
     public ViewGroup viewGroup;
     public ZXingScannerView zXingScannerView;
+    private ToneGenerator toneGenerator;
     protected int camera_id = -1;
     private ArrayList<Integer> selected_indices;
 
@@ -75,7 +72,16 @@ public class QRReaderActivity extends BaseActivity implements ZXingScannerView.R
     @Override
     public void handleResult(Result result) {
         barcode_result = result.getText();
-        new ToneGenerator(5, 100).startTone(24);
+        try {
+            // One generator for the screen: a new one per scan was never released and eventually
+            // failed to allocate (RuntimeException) after many scans.
+            if (toneGenerator == null) {
+                toneGenerator = new ToneGenerator(5, 100);
+            }
+            toneGenerator.startTone(24);
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Cannot play scan tone", e);
+        }
         final Dialog dialog = new Dialog(this, R.style.ThemeWithRoundShape);
         dialog.requestWindowFeature(1);
         dialog.setContentView(R.layout.barcode_result_dialog);
@@ -91,6 +97,9 @@ public class QRReaderActivity extends BaseActivity implements ZXingScannerView.R
             tv_search.setText("Call");
         }
         tv_result.setText(barcode_result);
+        // Copying is opt-in (long-press to select): closing the dialog used to put every scanned
+        // value, Wi-Fi passwords and tokens included, on the shared clipboard.
+        tv_result.setTextIsSelectable(true);
 
         ((TextView) dialog.findViewById(R.id.tv_share)).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -127,16 +136,11 @@ public class QRReaderActivity extends BaseActivity implements ZXingScannerView.R
         ((ImageView) dialog.findViewById(R.id.iv_close)).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                ((ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText(TextBundle.TEXT_ENTRY, barcode_result));
-                Toast.makeText(QRReaderActivity.this, "Text copied to clipboard", Toast.LENGTH_SHORT).show();
-                if (zXingScannerView == null) {
-
-                    zXingScannerView = new ZXingScannerView(QRReaderActivity.this);
-                    viewGroup.addView(zXingScannerView);
+                // The camera is still open after a result; opening it again failed and leaked the
+                // first instance (frozen preview, camera held until the process died).
+                if (zXingScannerView != null) {
+                    zXingScannerView.resumeCameraPreview(QRReaderActivity.this);
                 }
-                zXingScannerView.setResultHandler(QRReaderActivity.this);
-                zXingScannerView.startCamera(camera_id);
-                setupBarcodeFormats();
                 dialog.dismiss();
             }
         });
@@ -156,8 +160,23 @@ public class QRReaderActivity extends BaseActivity implements ZXingScannerView.R
     }
 
     @Override
+    public void onPause() {
+        // Release the camera while in the background so other apps can use it.
+        if (zXingScannerView != null) {
+            zXingScannerView.stopCamera();
+        }
+        super.onPause();
+    }
+
+    @Override
     public void onDestroy() {
-        zXingScannerView.stopCamera();
+        if (zXingScannerView != null) {
+            zXingScannerView.stopCamera();
+        }
+        if (toneGenerator != null) {
+            toneGenerator.release();
+            toneGenerator = null;
+        }
         super.onDestroy();
     }
 }

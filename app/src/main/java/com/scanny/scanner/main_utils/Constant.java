@@ -5,7 +5,7 @@ import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.ColorMatrixColorFilter;
-import android.icu.text.SimpleDateFormat;
+import java.text.SimpleDateFormat;
 import android.net.Uri;
 import android.widget.Toast;
 
@@ -27,6 +27,8 @@ public class Constant {
     public static int filterPosition = 0;
     public static String inputType = "Group";
     public static Bitmap original;
+    // Longest side of an imported photo. Imports were decoded at full size (50-200 MP photos ran out of memory).
+    public static final int MAX_IMPORT_SIDE = 4096;
     public static int selectedFont;
     public static int selectedWatermarkFont;
     public static Bitmap singleSideBitmap;

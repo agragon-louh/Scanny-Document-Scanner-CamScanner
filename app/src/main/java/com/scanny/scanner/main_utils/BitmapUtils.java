@@ -65,9 +65,30 @@ public class BitmapUtils {
         return BitmapFactory.decodeByteArray(bArr, 0, bArr.length);
     }
 
-    public static Uri getUri(Context context, Bitmap bitmap) {
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, new ByteArrayOutputStream());
-        return Uri.parse(MediaStore.Images.Media.insertImage(context.getContentResolver(), bitmap, "Title", (String) null));
+    /**
+     * Writes {@code bitmap} to a private cache file and returns a FileProvider URI for it (for
+     * sharing, or as uCrop's input). This used to insert the image into the public MediaStore,
+     * which put full-resolution scans (IDs, signatures) into the user's gallery and photo backup.
+     * {@code ContentResolver.delete} on the returned URI deletes the file.
+     */
+    public static Uri getUri(Context context, Bitmap bitmap) throws IOException {
+        if (bitmap == null) {
+            throw new IOException("No image");
+        }
+        File dir = new File(context.getCacheDir(), "share");
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IOException("Cannot create " + dir);
+        }
+        File file = new File(dir, System.currentTimeMillis() + ".jpg");
+        FileOutputStream outputStream = new FileOutputStream(file);
+        try {
+            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream)) {
+                throw new IOException("Cannot encode image");
+            }
+        } finally {
+            outputStream.close();
+        }
+        return FileProvider.getUriForFile(context, context.getPackageName() + ".provider", file);
     }
 
     public static Bitmap getBitmap(Context context, Uri uri) throws IOException {

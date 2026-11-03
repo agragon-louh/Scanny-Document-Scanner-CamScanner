@@ -263,6 +263,10 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
     @Override
     public void onCreate(Bundle bundle) {
         super.onCreate(bundle);
+        if (restartIfStateLost()) {
+            return;
+        }
+        blockScreenCapture();
         setContentView(R.layout.activity_document_editor);
         documentEditorActivity = this;
         dbHelper = new DBHelper(this);
@@ -558,7 +562,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
             while (it.hasNext()) {
                 Image next = it.next();
                 if (Build.VERSION.SDK_INT >= 29) {
-                    Glide.with(getApplicationContext()).asDrawable().load(next.getUri()).into(new SimpleTarget<Drawable>() {
+                    Glide.with(getApplicationContext()).asDrawable().load(next.getUri()).downsample(com.bumptech.glide.load.resource.bitmap.DownsampleStrategy.CENTER_INSIDE).into(new SimpleTarget<Drawable>(Constant.MAX_IMPORT_SIDE, Constant.MAX_IMPORT_SIDE) {
                         public void onResourceReady(Drawable drawable, Transition<? super Drawable> transition) {
                             stickerView.addSticker(new DrawableSticker(drawable), 1);
                             ly_edit_tools.setVisibility(View.INVISIBLE);
@@ -667,7 +671,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
                 slideDownAnimation(ly_text);
                 return;
             case R.id.iv_apply_watermark:
-                if (et_watermark_txt.getText().toString().length() > 0) {
+                if (et_watermark_txt.getText().toString().trim().length() > 0) {
                     ly_edit_tools.setVisibility(View.VISIBLE);
                     iv_done.setVisibility(View.VISIBLE);
                     rv_watermark_font.setVisibility(View.GONE);
@@ -824,7 +828,8 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
                                             public void onClick(DialogInterface dialogInterface, int i, Integer[] numArr) {
                                                 brush_color = i;
                                                 photoEditor.setBrushColor(i);
-                                                photoEditor.setOpacity(Color.alpha(i));
+                                                // setOpacity takes 0-100, not a 0-255 alpha (255 overflowed to ~54%).
+                                                photoEditor.setOpacity(Color.alpha(i) * 100 / 255);
                                                 iv_highlight.setImageResource(R.drawable.bic_highlight_selection);
                                                 iv_erase.setImageResource(R.drawable.bic_erase);
 
@@ -1612,7 +1617,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
         @Override
         public void onPostExecute(Bitmap bitmap2) {
             super.onPostExecute(bitmap2);
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
             stickerView.addSticker(new DrawableSticker((Drawable) new BitmapDrawable(getResources(), bitmap2)), 1);
             rl_signature.setVisibility(View.GONE);
             sb_opacity.setProgress(255);
@@ -1622,6 +1627,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
     }
 
     private class saveFinalBitmap extends AsyncTask<Bitmap, Void, Bitmap> {
+        Bitmap capturedFrame;
         boolean saveFailed;
         String group_name;
         ProgressDialog progressDialog;
@@ -1638,11 +1644,12 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
             progressDialog.setCancelable(false);
             progressDialog.setCanceledOnTouchOutside(false);
             progressDialog.show();
+            capturedFrame = documentEditorActivity.captureView(documentEditorActivity.rl_main);
         }
 
         @Override
         public Bitmap doInBackground(Bitmap... bitmapArr) {
-            Constant.original = documentEditorActivity.getMainFrameBitmap(documentEditorActivity.rl_main);
+            Constant.original = imageBitmap(capturedFrame);
             if (Constant.original == null || fromTAG.equals("IDCardPreviewActivity") || fromTAG.equals("ScannerActivity")) {
                 return null;
             }
@@ -1683,7 +1690,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
         @Override
         public void onPostExecute(Bitmap bitmap) {
             super.onPostExecute(bitmap);
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
             if (saveFailed) {
                 Toast.makeText(DocumentEditorActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
                 return;

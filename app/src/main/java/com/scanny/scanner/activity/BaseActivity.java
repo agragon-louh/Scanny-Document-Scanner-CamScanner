@@ -97,8 +97,14 @@ public class BaseActivity extends AppCompatActivity {
         return FileProvider.getUriForFile(activity, activity.getPackageName() + ".provider", new File(str));
     }
 
+    /** False in a fresh process, i.e. after Android killed the app while it was in the background. */
+    private static boolean processAlive;
+    private boolean stateLost;
+
     @Override
     public void onCreate(Bundle bundle) {
+        stateLost = bundle != null && !processAlive;
+        processAlive = true;
         // Apps targeting API 35+ are always drawn edge-to-edge. Enable it explicitly so older
         // Android versions behave the same, then pad the content in onPostCreate().
         EdgeToEdge.enable(this);
@@ -112,6 +118,30 @@ public class BaseActivity extends AppCompatActivity {
                 handleBack();
             }
         });
+    }
+
+    /**
+     * Call right after super.onCreate() in screens that depend on static state (the image being
+     * edited, the current folder, captured pages). That state is gone when Android recreates the
+     * screen in a new process, which used to crash these screens or act on the wrong folder.
+     * Returns true after sending the user back to the home screen; the caller must return.
+     */
+    protected boolean restartIfStateLost() {
+        if (!stateLost) {
+            return false;
+        }
+        startActivity(new android.content.Intent(this, MainActivity.class)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK));
+        finish();
+        return true;
+    }
+
+    /**
+     * Keeps this screen out of screenshots, screen recordings and the recent-apps thumbnail.
+     * Used on screens that show scanned documents (IDs, signatures).
+     */
+    protected void blockScreenCapture() {
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
     }
 
     /** Called for system back and for onBackPressed(). Subclasses override for custom behaviour. */
@@ -165,9 +195,18 @@ public class BaseActivity extends AppCompatActivity {
     }
 
     public Bitmap getMainFrameBitmap(View view) {
+        return imageBitmap(captureView(view));
+    }
+
+    /**
+     * Draws {@code view} into a bitmap. Must run on the UI thread: views were drawn from
+     * AsyncTask.doInBackground, racing the UI thread's own drawing. Trim the result with
+     * {@link #imageBitmap} off the UI thread (it reads every pixel).
+     */
+    public Bitmap captureView(View view) {
         Bitmap createBitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
         view.draw(new Canvas(createBitmap));
-        return imageBitmap(createBitmap);
+        return createBitmap;
     }
 
     public Bitmap getBitmap(File file) {
@@ -276,16 +315,32 @@ public class BaseActivity extends AppCompatActivity {
      * existing file. Previously both went to Download/Scanny/&lt;name&gt;.pdf, so opening or
      * sharing a page silently replaced the user's saved export.
      */
-    public File createPDFfromBitmap(String str, ArrayList<Bitmap> arrayList, String str2) {
+    public File createPDFfromBitmap(String str, ArrayList<?> arrayList, String str2) {
         File dir = str2.equals("temp") ? new File(getCacheDir(), "pdf")
                 : new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name));
         return writePdf(dir, str, arrayList, null, str2.equals("temp"));
     }
 
-    public File createProtectedPDFfromBitmap(String str, ArrayList<Bitmap> arrayList, String str2, String str3) {
+    public File createProtectedPDFfromBitmap(String str, ArrayList<?> arrayList, String str2, String str3) {
         File dir = str3.equals("temp") ? new File(getCacheDir(), "pdf")
                 : new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name) + "/Download");
         return writePdf(dir, str, arrayList, str2, str3.equals("temp"));
+    }
+
+    /**
+     * Dismisses a progress dialog unless this activity is already finishing or destroyed. A
+     * background task finishing after rotation or back used to crash with "View not attached to
+     * window manager".
+     */
+    protected void dismissSafely(android.app.Dialog dialog) {
+        if (dialog == null || !dialog.isShowing() || isFinishing() || isDestroyed()) {
+            return;
+        }
+        try {
+            dialog.dismiss();
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "Dialog already detached", e);
+        }
     }
 
     /** Shows an error toast and returns true when {@code pdf} (from createPDF...) is null. */
@@ -297,7 +352,31 @@ public class BaseActivity extends AppCompatActivity {
         return true;
     }
 
-    private File writePdf(File dir, String name, ArrayList<Bitmap> pages, String password, boolean replace) {
+    /** Longest side of a page image in the PDF: A4 at 300 dpi. */
+    private static final int MAX_PAGE_SIDE = 3508;
+
+    /**
+     * Decodes an image file no larger than needed for a PDF page. Pages used to be decoded at
+     * full resolution all at once, which ran out of memory for folders of 20+ pages.
+     */
+    private static Bitmap decodePage(String path) {
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(path, bounds);
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            return null;
+        }
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inPreferredConfig = Bitmap.Config.ARGB_8888;
+        options.inSampleSize = 1;
+        while (Math.max(bounds.outWidth, bounds.outHeight) / (options.inSampleSize * 2) >= MAX_PAGE_SIDE) {
+            options.inSampleSize *= 2;
+        }
+        return BitmapFactory.decodeFile(path, options);
+    }
+
+    /** {@code pages} holds Bitmaps or image file paths (Strings); paths are decoded one by one. */
+    private File writePdf(File dir, String name, ArrayList<?> pages, String password, boolean replace) {
         File file = null;
         Document document = new Document();
         try {
@@ -327,9 +406,11 @@ public class BaseActivity extends AppCompatActivity {
             document.addAuthor(getResources().getString(R.string.app_name));
             document.addCreator(getResources().getString(R.string.app_name));
             int pageCount = 0;
-            Iterator<Bitmap> it = pages.iterator();
+            Iterator<?> it = pages.iterator();
             while (it.hasNext()) {
-                Bitmap page = it.next();
+                Object item = it.next();
+                boolean decoded = item instanceof String;
+                Bitmap page = decoded ? decodePage((String) item) : (Bitmap) item;
                 if (page == null) {
                     // Missing or unreadable image file: skip the page instead of crashing.
                     continue;
@@ -338,6 +419,9 @@ public class BaseActivity extends AppCompatActivity {
                 document.newPage();
                 ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
                 page.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream);
+                if (decoded) {
+                    page.recycle();
+                }
                 Image instance = Image.getInstance(byteArrayOutputStream.toByteArray());
                 instance.scaleToFit(PageSize.A4.getWidth(), PageSize.A4.getHeight());
                 instance.setAbsolutePosition((PageSize.A4.getWidth() - instance.getScaledWidth()) / 2.0f, (PageSize.A4.getHeight() - instance.getScaledHeight()) / 2.0f);

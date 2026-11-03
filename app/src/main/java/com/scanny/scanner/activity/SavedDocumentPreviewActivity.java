@@ -144,12 +144,16 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
     @Override
     public void onCreate(Bundle bundle) {
         super.onCreate(bundle);
+        if (restartIfStateLost()) {
+            return;
+        }
+        blockScreenCapture();
         setContentView(R.layout.activity_saved_document_preview);
         savedDocumentPreviewActivity = this;
         dataBaseHelper = new DBHelper(this);
 
         init();
-        bindView();
+        bindView(bundle);
     }
 
     private void init() {
@@ -161,7 +165,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
         rv_saved_tools = (RecyclerView) findViewById(R.id.rv_saved_tools);
     }
 
-    private void bindView() {
+    private void bindView(Bundle bundle) {
         edit_doc_grp_name = bundle != null && bundle.getString("edit_doc_group_name") != null
                 ? bundle.getString("edit_doc_group_name") : getIntent().getStringExtra("edit_doc_group_name");
         current_doc_name = getIntent().getStringExtra("current_doc_name");
@@ -373,7 +377,13 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
         ((RelativeLayout) dialog.findViewById(R.id.rl_share_img)).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                shareUri = BitmapUtils.getUri(savedDocumentPreviewActivity, Constant.original);
+                try {
+                    shareUri = BitmapUtils.getUri(savedDocumentPreviewActivity, Constant.original);
+                } catch (IOException e) {
+                    Toast.makeText(SavedDocumentPreviewActivity.this, "Could not share the image", Toast.LENGTH_SHORT).show();
+                    dialog.dismiss();
+                    return;
+                }
                 Intent intent = new Intent();
                 intent.setAction("android.intent.action.SEND");
                 intent.setType("image/*");
@@ -509,8 +519,8 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
 
         @Override
         public String doInBackground(String... strArr) {
-            currentDocList.clear();
-            currentDocList.addAll(dataBaseHelper.getGroupDocs(edit_doc_grp_name));
+            // A new list: the visible pager adapter must not see this one change off the UI thread.
+            currentDocList = dataBaseHelper.getGroupDocs(edit_doc_grp_name);
             return null;
         }
 
@@ -549,7 +559,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
             } else {
 //                Toast.makeText(getApplicationContext(), "Something Went Wrong...", Toast.LENGTH_SHORT).show();
             }
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
         }
     }
 
@@ -585,11 +595,11 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
         public void onPostExecute(String str) {
             super.onPostExecute(str);
             if (pdfFailed(pdfFile)) {
-                progressDialog.dismiss();
+                dismissSafely(progressDialog);
                 return;
             }
             pdfUri = BaseActivity.getURIFromFile(pdfFile.getPath(), SavedDocumentPreviewActivity.this);
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
             selected_group_name = group_name;
             Constant.IdentifyActivity = "PDFViewerActivity_Preview";
             NavigationUtils.jumpNextActivity(SavedDocumentPreviewActivity.this);
@@ -620,7 +630,6 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
             Matrix matrix = new Matrix();
             matrix.postRotate(90.0f);
             Bitmap createBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
-            Constant.original.recycle();
             System.gc();
             Constant.original = createBitmap;
             byte[] bytes = BitmapUtils.getBytes(Constant.original);
@@ -635,7 +644,6 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
             } else {
                 dataBaseHelper.updateGroupListDoc(edit_doc_grp_name, current_doc_name, file.getPath());
             }
-            currentDocList.clear();
             currentDocList = dataBaseHelper.getGroupDocs(edit_doc_grp_name);
             return null;
         }
@@ -646,7 +654,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
             previewPagerAdapter = new PreviewPagerAdapter(savedDocumentPreviewActivity, currentDocList);
             viewPager.setAdapter(previewPagerAdapter);
             viewPager.setCurrentItem(position);
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
             if (saveFailed) {
                 Toast.makeText(SavedDocumentPreviewActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
             }
@@ -691,7 +699,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
         public void onPostExecute(String str) {
             super.onPostExecute(str);
             if (pdfFailed(pdfFile)) {
-                progressDialog.dismiss();
+                dismissSafely(progressDialog);
                 return;
             }
             Uri uRIFromFile = BaseActivity.getURIFromFile(pdfFile.getPath(), SavedDocumentPreviewActivity.this);
@@ -703,7 +711,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
             intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             Intent createChooser = Intent.createChooser(intent, (CharSequence) null);
             if (progressDialog.isShowing()) {
-                progressDialog.dismiss();
+                dismissSafely(progressDialog);
             }
             startActivity(createChooser);
         }
@@ -744,7 +752,6 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
             } else {
                 dataBaseHelper.updateGroupListDoc(edit_doc_grp_name, current_doc_name, file.getPath());
             }
-            currentDocList.clear();
             currentDocList = dataBaseHelper.getGroupDocs(edit_doc_grp_name);
             return null;
         }
@@ -755,7 +762,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
             previewPagerAdapter = new PreviewPagerAdapter(savedDocumentPreviewActivity, currentDocList);
             viewPager.setAdapter(previewPagerAdapter);
             viewPager.setCurrentItem(position);
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
             if (saveFailed) {
                 Toast.makeText(SavedDocumentPreviewActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
             }

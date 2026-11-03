@@ -106,6 +106,10 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
     @Override
     public void onCreate(Bundle bundle) {
         super.onCreate(bundle);
+        if (restartIfStateLost()) {
+            return;
+        }
+        blockScreenCapture();
         setContentView(R.layout.activity_crop_document);
         dbHelper = new DBHelper(this);
         init();
@@ -304,7 +308,6 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
                 Matrix matrix = new Matrix();
                 matrix.postRotate(90.0f);
                 Bitmap createBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
-                Constant.original.recycle();
                 System.gc();
                 Constant.original = createBitmap;
                 original = createBitmap;
@@ -345,7 +348,6 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
                 Matrix matrix = new Matrix();
                 matrix.postRotate(90.0f);
                 Bitmap createBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
-                Constant.original.recycle();
                 System.gc();
                 Constant.original = createBitmap;
                 iv_preview_crop.setImageToCrop(Constant.original);
@@ -390,7 +392,7 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
 
     public void dismissProgressDialog() {
         if (progressDialog.isShowing()) {
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
         }
     }
 
@@ -444,7 +446,7 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
         @Override
         public void onPostExecute(Bitmap bitmap) {
             super.onPostExecute(bitmap);
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
             if (saveFailed) {
                 Toast.makeText(CropDocumentActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
                 return;
@@ -506,7 +508,7 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
         @Override
         public void onPostExecute(Bitmap bitmap) {
             super.onPostExecute(bitmap);
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
             if (saveFailed) {
                 Toast.makeText(CropDocumentActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
                 return;

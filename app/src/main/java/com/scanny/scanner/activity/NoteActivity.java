@@ -27,6 +27,10 @@ public class NoteActivity extends BaseActivity {
     @Override
     public void onCreate(Bundle bundle) {
         super.onCreate(bundle);
+        if (restartIfStateLost()) {
+            return;
+        }
+        blockScreenCapture();
         setContentView(R.layout.activity_note);
         dbHelper = new DBHelper(this);
 

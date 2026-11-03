@@ -87,6 +87,10 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
     @Override
     public void onCreate(Bundle bundle) {
         super.onCreate(bundle);
+        if (restartIfStateLost()) {
+            return;
+        }
+        blockScreenCapture();
         setContentView(R.layout.activity_current_filter);
         dataBaseHelper = new DBHelper(this);
         init();
@@ -287,7 +291,7 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
 
     public void dismissProgressDialog() {
         if (progressDialog.isShowing()) {
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
         }
     }
 
@@ -343,7 +347,7 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
         @Override
         public void onPostExecute(Bitmap bitmap) {
             super.onPostExecute(bitmap);
-            progressDialog.dismiss();
+            dismissSafely(progressDialog);
             if (saveFailed) {
                 Toast.makeText(CurrentFilterActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
                 return;
