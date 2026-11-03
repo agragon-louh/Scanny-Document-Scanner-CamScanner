@@ -53,9 +53,41 @@ public class ScanActivity extends Activity implements IScanner, ComponentCallbac
         return filter(bitmap, rgba -> ScanImageOps.warp(rgba, x1, y1, x2, y2, x3, y3, x4, y4));
     }
 
-    /** Text-line deskew (see {@link ScanImageOps#deskew}); null for non-ARGB_8888 input. */
-    public static Bitmap getDeskewedBitmap(Bitmap bitmap) {
-        return filter(bitmap, ScanImageOps::deskew);
+    /**
+     * Auto-straighten (see {@link ScanImageOps#straighten}): warp the page flat, then deskew.
+     *
+     * @param hint optional page corners from another detector as {@code [x0, y0, ..., x3, y3]}
+     *             in any order; ignored when not plausible
+     * @return the straightened page, or null when nothing changed or the input is not ARGB_8888
+     */
+    public static Bitmap getStraightenedBitmap(Bitmap bitmap, float[] hint) {
+        if (bitmap == null || bitmap.getConfig() != Bitmap.Config.ARGB_8888) {
+            return null;
+        }
+        org.opencv.core.Point[] hintPts = null;
+        if (hint != null && hint.length == 8) {
+            hintPts = new org.opencv.core.Point[4];
+            for (int i = 0; i < 4; i++) {
+                hintPts[i] = new org.opencv.core.Point(hint[2 * i], hint[2 * i + 1]);
+            }
+        }
+        Mat src = new Mat();
+        Mat dst = null;
+        try {
+            Utils.bitmapToMat(bitmap, src);
+            dst = ScanImageOps.straighten(src, hintPts).image;
+            if (dst == null) {
+                return null;
+            }
+            Bitmap result = Bitmap.createBitmap(dst.cols(), dst.rows(), Bitmap.Config.ARGB_8888);
+            Utils.matToBitmap(dst, result);
+            return result;
+        } finally {
+            src.release();
+            if (dst != null) {
+                dst.release();
+            }
+        }
     }
 
     public static Bitmap getGrayBitmap(Bitmap bitmap) {

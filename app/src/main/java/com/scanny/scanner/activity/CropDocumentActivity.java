@@ -136,6 +136,11 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
 
         if (Constant.original != null) {
             iv_preview_crop.setImageToCrop(Constant.original);
+            if (Constant.straightened != null && Constant.original == Constant.straightened) {
+                // Already warped flat by auto-straighten: select the whole page instead of the
+                // quad SmartCropper's auto-scan would re-detect inside it (a table, a text block).
+                iv_preview_crop.setFullImgCrop();
+            }
             original = Constant.original;
             changeBrightness(20);
         }
@@ -330,12 +335,15 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
                 return;
             case R.id.iv_full_crop:
                 if (Constant.rawOriginal != null && Constant.original == Constant.straightened) {
-                    // Auto-straighten was applied: the full-crop button hands back the untouched page.
+                    // Auto-straighten was applied (and the whole page is already selected): the
+                    // first tap undoes it and shows the untouched photo with auto-detected corners
+                    // to adjust by hand. A second tap selects the full frame as usual.
                     Constant.original = Constant.rawOriginal;
                     original = Constant.rawOriginal;
                     Constant.rawOriginal = null;
                     Constant.straightened = null;
                     iv_preview_crop.setImageToCrop(Constant.original);
+                    return;
                 }
                 iv_preview_crop.setFullImgCrop();
                 return;

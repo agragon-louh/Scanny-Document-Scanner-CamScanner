@@ -20,14 +20,16 @@ import java.util.List;
  * Document filters and edge detection on OpenCV {@link Mat}s.
  *
  * <p>Java port of the former {@code jni/scan.cpp} (built against a 2017 OpenCV 3 prebuilt).
- * The operations, parameters and quirks are kept as they were so scans look the same:</p>
+ * The filters keep their parameters and quirks so scans look the same:</p>
  * <ul>
  *     <li>Input Mats are 4-channel images in Android bitmap memory order (RGBA).</li>
  *     <li>The gray and black-and-white filters convert with BGR weights, exactly like the
  *     native code did on RGBA data.</li>
  *     <li>The magic-colour contrast stretch also applies to the alpha channel.</li>
- *     <li>Edge detection only examines the first colour channel.</li>
  * </ul>
+ *
+ * <p>Page detection ({@link #detectPage}) and auto-straighten ({@link #straighten}) are new; the
+ * native single-channel contour search they replace missed pages with clutter on the edges.</p>
  *
  * <p>Plain OpenCV Java API only (no Android classes), so it can be unit-tested on the JVM.</p>
  */
@@ -176,6 +178,11 @@ public final class ScanImageOps {
         if (Math.abs(angle) < MIN_DESKEW_DEGREES) {
             return rgba.clone();
         }
+        return rotate(rgba, angle);
+    }
+
+    /** Rotates about the centre by {@code angle} degrees (counter-clockwise), same size, edges replicated. */
+    private static Mat rotate(Mat rgba, double angle) {
         Point centre = new Point(rgba.cols() / 2.0, rgba.rows() / 2.0);
         Mat m = Imgproc.getRotationMatrix2D(centre, angle, 1.0);
         Mat dst = new Mat();
@@ -184,100 +191,264 @@ public final class ScanImageOps {
         return dst;
     }
 
+    /** Detection runs on a copy whose longer side is this many pixels (speed, and less noise). */
+    private static final int DETECT_SIDE = 500;
+    /** A page quad must cover at least this share of the frame (smaller ones are false positives). */
+    public static final double MIN_PAGE_AREA_FRACTION = 0.20;
+    /** Quad corners this close (share of the frame size) to a frame border count as on the border. */
+    private static final double FULL_FRAME_TOLERANCE = 0.02;
+    /** Largest |cos| allowed at a corner: 0.4 accepts corner angles between about 66 and 114 degrees. */
+    private static final double MAX_CORNER_COSINE = 0.4;
+
     /**
-     * Finds the largest roughly rectangular contour (the document). Returns
-     * {@code [x1, x2, x3, x4, y1, y2, y3, y4]}; the whole image when nothing is found.
+     * Finds the document. Returns {@code [x1, x2, x3, x4, y1, y2, y3, y4]} for the corners
+     * top-left, top-right, bottom-left, bottom-right (the order {@link #warp} takes), or the whole
+     * image when no page is found.
      */
     public static float[] findCorners(Mat rgba) {
-        int width = rgba.cols();
-        int height = rgba.rows();
-        Mat blurred = new Mat();
-        Imgproc.medianBlur(rgba, blurred, 9);
-
-        Mat gray0 = new Mat(blurred.size(), CvType.CV_8U);
-        Mat gray = new Mat();
-        List<MatOfPoint> squares = new ArrayList<>();
-        final int thresholdLevel = 2;
-
-        // The native loop over colour planes returned after the first plane; so does this.
-        int channel = 0;
-        // Collections.singletonList, not List.of: minSdk 23 has no Java 9 collection factories.
-        Core.mixChannels(Collections.singletonList(blurred), Collections.singletonList(gray0), new MatOfInt(channel, 0));
-        for (int l = 0; l < thresholdLevel; l++) {
-            if (l == 0) {
-                // Canny catches squares with gradient shading; dilate closes gaps between edges.
-                Imgproc.Canny(gray0, gray, 10, 20, 3, false);
-                Imgproc.dilate(gray, gray, new Mat(), new Point(-1, -1));
-            } else {
-                Core.compare(gray0, new Scalar((l + 1) * 255 / thresholdLevel), gray, Core.CMP_GE);
-            }
-            List<MatOfPoint> contours = new ArrayList<>();
-            Mat hierarchy = new Mat();
-            Imgproc.findContours(gray, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
-            hierarchy.release();
-            for (MatOfPoint contour : contours) {
-                MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
-                MatOfPoint2f approx2f = new MatOfPoint2f();
-                Imgproc.approxPolyDP(contour2f, approx2f, Imgproc.arcLength(contour2f, true) * 0.02, true);
-                MatOfPoint approx = toIntPoints(approx2f);
-                contour2f.release();
-                approx2f.release();
-                if (approx.total() == 4
-                        && Math.abs(Imgproc.contourArea(approx)) > 1000
-                        && Imgproc.isContourConvex(approx)) {
-                    Point[] p = approx.toArray();
-                    double maxCosine = 0;
-                    for (int j = 2; j < 5; j++) {
-                        maxCosine = Math.max(maxCosine, Math.abs(angle(p[j % 4], p[j - 2], p[j - 1])));
-                    }
-                    if (maxCosine < 0.3) {
-                        squares.add(approx);
-                        continue;
-                    }
-                }
-                approx.release();
-            }
+        Point[] q = detectPage(rgba);
+        if (q == null) {
+            int w = rgba.cols();
+            int h = rgba.rows();
+            q = new Point[]{new Point(0, 0), new Point(w, 0), new Point(w, h), new Point(0, h)};
         }
-        blurred.release();
-        gray0.release();
-        gray.release();
-
-        Point[] points;
-        if (squares.isEmpty()) {
-            points = new Point[]{new Point(0, 0), new Point(width, 0), new Point(0, height), new Point(width, height)};
-        } else {
-            double largestArea = -1;
-            int largest = 0;
-            for (int i = 0; i < squares.size(); i++) {
-                double area = Imgproc.contourArea(squares.get(i), false);
-                if (area > largestArea) {
-                    largestArea = area;
-                    largest = i;
-                }
-            }
-            points = squares.get(largest).toArray();
-        }
-        for (MatOfPoint square : squares) {
-            square.release();
-        }
+        // q is TL, TR, BR, BL; the float layout is TL, TR, BL, BR.
+        Point[] warpOrder = {q[0], q[1], q[3], q[2]};
         float[] result = new float[8];
         for (int i = 0; i < 4; i++) {
-            result[i] = (float) points[i].x;
-            result[i + 4] = (float) points[i].y;
+            result[i] = (float) warpOrder[i].x;
+            result[i + 4] = (float) warpOrder[i].y;
         }
         return result;
     }
 
-    /** approxPolyDP on int contours yields int points in C++; round the same way here. */
-    private static MatOfPoint toIntPoints(MatOfPoint2f points) {
-        Point[] src = points.toArray();
-        Point[] dst = new Point[src.length];
-        for (int i = 0; i < src.length; i++) {
-            dst[i] = new Point(Math.round(src[i].x), Math.round(src[i].y));
+    /**
+     * Finds the page quadrilateral, ordered top-left, top-right, bottom-right, bottom-left, in the
+     * coordinates of {@code rgba}; null when no plausible page is visible.
+     *
+     * <p>Works on a downscaled luminance copy. A morphological close first wipes out dark detail
+     * narrower than the kernel (text, pens, cables) so the page becomes a flat bright region; then
+     * several edge maps are searched for the largest convex four-sided contour. Each contour is
+     * replaced by its convex hull before polygon fitting, so an object overlapping the page edge
+     * (a notch in the outline) does not break the quad.</p>
+     */
+    public static Point[] detectPage(Mat rgba) {
+        int w = rgba.cols();
+        int h = rgba.rows();
+        if (w < 8 || h < 8) {
+            return null;
         }
-        return new MatOfPoint(dst);
+        double scale = Math.min(1.0, DETECT_SIDE / (double) Math.max(w, h));
+        Mat small = new Mat();
+        if (scale < 1) {
+            Imgproc.resize(rgba, small, new Size(), scale, scale, Imgproc.INTER_AREA);
+        } else {
+            rgba.copyTo(small);
+        }
+        Mat gray = new Mat();
+        Imgproc.cvtColor(small, gray, small.channels() == 4 ? Imgproc.COLOR_RGBA2GRAY : Imgproc.COLOR_RGB2GRAY);
+        small.release();
+        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(9, 9));
+        Imgproc.morphologyEx(gray, gray, Imgproc.MORPH_CLOSE, kernel);
+        Imgproc.GaussianBlur(gray, gray, new Size(5, 5), 0);
+
+        List<Mat> edgeMaps = new ArrayList<>();
+        // Low thresholds find low-contrast pages (white paper on a light desk); higher ones keep
+        // a textured desk from swallowing the page outline.
+        for (double[] t : new double[][]{{10, 30}, {30, 90}}) {
+            Mat e = new Mat();
+            Imgproc.Canny(gray, e, t[0], t[1]);
+            Imgproc.dilate(e, e, kernel.submat(0, 3, 0, 3));
+            edgeMaps.add(e);
+        }
+        Mat otsu = new Mat();
+        Imgproc.threshold(gray, otsu, 0, 255, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
+        edgeMaps.add(otsu);
+        kernel.release();
+        gray.release();
+
+        int sw = (int) Math.round(w * scale);
+        int sh = (int) Math.round(h * scale);
+        Point[] best = null;
+        double bestArea = 0;
+        for (Mat edges : edgeMaps) {
+            List<MatOfPoint> contours = new ArrayList<>();
+            Mat hierarchy = new Mat();
+            Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
+            hierarchy.release();
+            edges.release();
+            for (MatOfPoint contour : contours) {
+                Point[] quad = quadFromContour(contour);
+                contour.release();
+                if (quad == null) {
+                    continue;
+                }
+                double area = area(quad);
+                if (area > bestArea && isPlausiblePage(quad, sw, sh)) {
+                    bestArea = area;
+                    best = quad;
+                }
+            }
+        }
+        if (best == null) {
+            return null;
+        }
+        for (int i = 0; i < 4; i++) {
+            best[i] = new Point(clamp(best[i].x / scale, 0, w), clamp(best[i].y / scale, 0, h));
+        }
+        return best;
     }
 
+    /** Convex hull, then polygon fit; the four corners (ordered) if the result is a quad, else null. */
+    private static Point[] quadFromContour(MatOfPoint contour) {
+        if (contour.total() < 4) {
+            return null;
+        }
+        MatOfInt hullIdx = new MatOfInt();
+        Imgproc.convexHull(contour, hullIdx);
+        Point[] pts = contour.toArray();
+        int[] idx = hullIdx.toArray();
+        hullIdx.release();
+        Point[] hull = new Point[idx.length];
+        for (int i = 0; i < idx.length; i++) {
+            hull[i] = pts[idx[i]];
+        }
+        MatOfPoint2f hull2f = new MatOfPoint2f(hull);
+        double perimeter = Imgproc.arcLength(hull2f, true);
+        if (perimeter < 40) {
+            hull2f.release();
+            return null;
+        }
+        MatOfPoint2f approx = new MatOfPoint2f();
+        Imgproc.approxPolyDP(hull2f, approx, perimeter * 0.02, true);
+        hull2f.release();
+        Point[] quad = approx.total() == 4 ? approx.toArray() : null;
+        approx.release();
+        return quad == null ? null : orderCorners(quad);
+    }
+
+    /**
+     * True when {@code quad} (any order) looks like a page in a {@code w} x {@code h} frame: convex,
+     * corners not too far from right angles, at least {@link #MIN_PAGE_AREA_FRACTION} of the frame,
+     * and not simply the frame itself.
+     */
+    public static boolean isPlausiblePage(Point[] quad, int w, int h) {
+        if (quad == null || quad.length != 4 || w <= 0 || h <= 0) {
+            return false;
+        }
+        Point[] q = orderCorners(quad);
+        MatOfPoint contour = new MatOfPoint(q);
+        boolean convex = Imgproc.isContourConvex(contour);
+        contour.release();
+        if (!convex) {
+            return false;
+        }
+        if (area(q) < MIN_PAGE_AREA_FRACTION * w * h) {
+            return false;
+        }
+        for (int i = 0; i < 4; i++) {
+            if (Math.abs(angle(q[(i + 1) % 4], q[(i + 3) % 4], q[i])) > MAX_CORNER_COSINE) {
+                return false;
+            }
+        }
+        double tx = FULL_FRAME_TOLERANCE * w;
+        double ty = FULL_FRAME_TOLERANCE * h;
+        // An edge running along the frame border is the frame, not the page: a shadow or the
+        // desk split by a threshold, or a page cut off by the frame (left to the user for now).
+        for (int i = 0; i < 4; i++) {
+            Point a = q[i];
+            Point b = q[(i + 1) % 4];
+            if ((a.x <= tx && b.x <= tx) || (a.x >= w - tx && b.x >= w - tx)
+                    || (a.y <= ty && b.y <= ty) || (a.y >= h - ty && b.y >= h - ty)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Orders four corners as top-left, top-right, bottom-right, bottom-left (clockwise on screen).
+     * Sorts by angle around the centroid, then starts at the corner with the smallest x + y, so it
+     * also works for strongly rotated quads.
+     */
+    public static Point[] orderCorners(Point[] pts) {
+        final double cx = (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4;
+        final double cy = (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4;
+        Point[] sorted = pts.clone();
+        java.util.Arrays.sort(sorted, (a, b) -> Double.compare(
+                Math.atan2(a.y - cy, a.x - cx), Math.atan2(b.y - cy, b.x - cx)));
+        // atan2 with y pointing down sorts clockwise on screen. Rotate so TL comes first.
+        int start = 0;
+        for (int i = 1; i < 4; i++) {
+            if (sorted[i].x + sorted[i].y < sorted[start].x + sorted[start].y) {
+                start = i;
+            }
+        }
+        Point[] out = new Point[4];
+        for (int i = 0; i < 4; i++) {
+            out[i] = sorted[(start + i) % 4];
+        }
+        return out;
+    }
+
+    /** What {@link #straighten} did. */
+    public static final class Straightened {
+        /** The straightened page, or null when nothing was changed (no page found, no skew). */
+        public final Mat image;
+        /** Page corners used for the warp (TL, TR, BR, BL in input coordinates), or null if none. */
+        public final Point[] quad;
+        /** Deskew rotation applied after the warp, in degrees (0 when none). */
+        public final double skewDegrees;
+
+        Straightened(Mat image, Point[] quad, double skewDegrees) {
+            this.image = image;
+            this.quad = quad;
+            this.skewDegrees = skewDegrees;
+        }
+    }
+
+    /**
+     * Auto-straighten: finds the page, perspective-warps it to a rectangle, then removes remaining
+     * text-line skew. {@code hint} is an optional quad from another detector (e.g. SmartCropper);
+     * it is used when {@link #isPlausiblePage plausible}, otherwise {@link #detectPage} runs. When
+     * no page is found the whole image is only deskewed.
+     */
+    public static Straightened straighten(Mat rgba, Point[] hint) {
+        Point[] quad = isPlausiblePage(hint, rgba.cols(), rgba.rows()) ? orderCorners(hint) : detectPage(rgba);
+        Mat page = rgba;
+        if (quad != null) {
+            page = warp(rgba, (float) quad[0].x, (float) quad[0].y, (float) quad[1].x, (float) quad[1].y,
+                    (float) quad[3].x, (float) quad[3].y, (float) quad[2].x, (float) quad[2].y);
+        }
+        double angle = estimateSkew(page);
+        if (Math.abs(angle) < MIN_DESKEW_DEGREES) {
+            angle = 0;
+        }
+        Mat out = page;
+        if (angle != 0) {
+            out = rotate(page, angle);
+            if (page != rgba) {
+                page.release();
+            }
+        }
+        return new Straightened(out == rgba ? null : out, quad, angle);
+    }
+
+    private static double area(Point[] q) {
+        double s = 0;
+        for (int i = 0; i < q.length; i++) {
+            Point p = q[i];
+            Point n = q[(i + 1) % q.length];
+            s += p.x * n.y - n.x * p.y;
+        }
+        return Math.abs(s) / 2;
+    }
+
+    private static double clamp(double v, double lo, double hi) {
+        return Math.max(lo, Math.min(hi, v));
+    }
+
+    /** Cosine of the angle at {@code pt0} between the rays to {@code pt1} and {@code pt2}. */
     private static double angle(Point pt1, Point pt2, Point pt0) {
         double dx1 = pt1.x - pt0.x;
         double dy1 = pt1.y - pt0.y;

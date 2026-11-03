@@ -9,8 +9,6 @@ import android.os.Looper;
 
 import com.scanlibrary.ScanActivity;
 
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -20,16 +18,12 @@ import me.pqpo.smartcropperlib.SmartCropper;
  * Auto-straighten: finds the page quadrilateral, perspective-warps it to a rectangle, then rotates
  * away any remaining text-line skew. Runs before the crop screen so it opens on a flat page.
  *
- * <p>Detection prefers SmartCropper (the model the crop screen already uses) and falls back to the
- * OpenCV contour search when SmartCropper only returns the whole frame. Every step is best-effort:
- * on any failure the input bitmap is returned unchanged.</p>
+ * <p>SmartCropper (the model the crop screen already uses) proposes the page corners; the pipeline
+ * itself ({@code ScanImageOps.straighten}, unit-tested on the JVM) checks them and falls back to
+ * its own OpenCV detector when they are implausible or just the whole frame. Every step is
+ * best-effort: on any failure the input bitmap is returned unchanged.</p>
  */
 public final class DocumentStraightener {
-
-    /** A detected quad smaller than this share of the frame is treated as a false positive. */
-    private static final double MIN_QUAD_AREA_FRACTION = 0.20;
-    /** Corners within this share of the frame size of the frame's own corners mean "no page found". */
-    private static final double FULL_FRAME_TOLERANCE = 0.02;
 
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
@@ -86,7 +80,7 @@ public final class DocumentStraightener {
         });
     }
 
-    /** Synchronous core; call from a background thread. Never throws; returns {@code source} on failure. */
+    /** Synchronous core; call from a background thread. Never throws; returns {@code source} when unchanged. */
     public static Bitmap straighten(Bitmap source) {
         if (source == null) {
             return null;
@@ -97,99 +91,31 @@ public final class DocumentStraightener {
             if (argb == null) {
                 return source;
             }
-            Bitmap page = argb;
-            Point[] quad = detectQuad(argb);
-            if (quad != null) {
-                Bitmap warped = SmartCropper.crop(argb, quad);
-                if (warped != null) {
-                    page = warped;
-                }
+            Bitmap result = ScanActivity.getStraightenedBitmap(argb, smartCropperHint(argb));
+            if (argb != source && argb != result) {
+                argb.recycle();
             }
-            Bitmap deskewed = ScanActivity.getDeskewedBitmap(page);
-            Bitmap result = deskewed != null ? deskewed : page;
-            return result;
+            return result != null ? result : source;
         } catch (Throwable t) { // includes OutOfMemoryError and missing-native-library errors
             return source;
         }
     }
 
-    /** Page corners ordered top-left, top-right, bottom-right, bottom-left; null if no real page found. */
-    private static Point[] detectQuad(Bitmap bitmap) {
-        int w = bitmap.getWidth();
-        int h = bitmap.getHeight();
-        Point[] quad = null;
+    /** SmartCropper's corners as {@code [x0, y0, ..., x3, y3]}, or null if it is unavailable. */
+    private static float[] smartCropperHint(Bitmap bitmap) {
         try {
-            Point[] scanned = SmartCropper.scan(bitmap);
-            if (scanned != null && scanned.length == 4 && !isFullFrame(scanned, w, h)) {
-                quad = scanned;
+            Point[] pts = SmartCropper.scan(bitmap);
+            if (pts == null || pts.length != 4) {
+                return null;
             }
-        } catch (Throwable ignored) {
-            // fall through to the OpenCV detector
-        }
-        if (quad == null) {
-            float[] c = ScanActivity.getPoints(bitmap); // [x1..x4, y1..y4], unordered contour points
-            if (c != null) {
-                Point[] pts = new Point[4];
-                for (int i = 0; i < 4; i++) {
-                    pts[i] = new Point(Math.round(c[i]), Math.round(c[i + 4]));
-                }
-                if (!isFullFrame(pts, w, h)) {
-                    quad = pts;
-                }
+            float[] hint = new float[8];
+            for (int i = 0; i < 4; i++) {
+                hint[2 * i] = pts[i].x;
+                hint[2 * i + 1] = pts[i].y;
             }
-        }
-        if (quad == null) {
+            return hint;
+        } catch (Throwable ignored) { // model failed to load, native crash guard, etc.
             return null;
         }
-        quad = order(quad);
-        return area(quad) >= MIN_QUAD_AREA_FRACTION * w * h ? quad : null;
-    }
-
-    private static boolean isFullFrame(Point[] pts, int w, int h) {
-        double tx = FULL_FRAME_TOLERANCE * w;
-        double ty = FULL_FRAME_TOLERANCE * h;
-        int[][] corners = {{0, 0}, {w, 0}, {w, h}, {0, h}};
-        for (int[] corner : corners) {
-            boolean near = false;
-            for (Point p : pts) {
-                if (Math.abs(p.x - corner[0]) <= tx && Math.abs(p.y - corner[1]) <= ty) {
-                    near = true;
-                    break;
-                }
-            }
-            if (!near) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /** Orders any four corners as TL, TR, BR, BL (smallest x+y is TL, largest is BR, x-y gives TR/BL). */
-    static Point[] order(Point[] pts) {
-        Point[] sorted = Arrays.copyOf(pts, 4);
-        Arrays.sort(sorted, new Comparator<Point>() {
-            @Override
-            public int compare(Point a, Point b) {
-                return Integer.compare(a.x + a.y, b.x + b.y);
-            }
-        });
-        Point tl = sorted[0];
-        Point br = sorted[3];
-        Point a = sorted[1];
-        Point b = sorted[2];
-        // Of the two remaining corners, top-right has the larger x - y.
-        Point tr = (a.x - a.y) >= (b.x - b.y) ? a : b;
-        Point bl = tr == a ? b : a;
-        return new Point[]{tl, tr, br, bl};
-    }
-
-    private static double area(Point[] q) {
-        double s = 0;
-        for (int i = 0; i < 4; i++) {
-            Point p = q[i];
-            Point n = q[(i + 1) % 4];
-            s += (double) p.x * n.y - (double) n.x * p.y;
-        }
-        return Math.abs(s) / 2;
     }
 }

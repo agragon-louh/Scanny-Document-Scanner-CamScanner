@@ -30,16 +30,33 @@ Goal: a captured page comes out flat, upright and cropped without the user touch
       text pages.
 - [x] Fix the output-size formula in `ScanImageOps.warp` (use real edge lengths, keep the aspect
       ratio of the longer edges).
-- [x] `DocumentStraightener` in the app: SmartCropper detection, fallback to
-      `ScanImageOps.findCorners` when SmartCropper returns the full frame, warp, deskew. Runs on a
-      background thread (not `AsyncTask`).
+- [x] `DocumentStraightener` in the app: SmartCropper detection, fallback to the OpenCV detector
+      when SmartCropper returns the full frame, warp, deskew. Runs on a background thread (not
+      `AsyncTask`).
 - [x] Call it from `ScannerActivity.onPictureTaken` and from gallery import. The crop screen opens
       with the result applied; "full crop" restores the original.
 - [x] Settings toggle: Auto-straighten on/off (drawer row, default on).
+- [x] Straighten pipeline moved into `ScanImageOps.straighten` (JVM-testable): SmartCropper's quad
+      is a hint, checked by `isPlausiblePage` (convex, >= 20% of frame, corners 66-114 degrees, no
+      edge on the frame border); otherwise `detectPage` runs. The warp is `ScanImageOps.warp`.
+- [x] `detectPage` replaces the native-port contour search: 500 px luminance copy, grey closing to
+      erase text and pens, Canny at two thresholds plus Otsu, convex hull before polygon fitting.
+      About 30x faster than the old full-resolution search (desktop: 9 vs 266 ms), and finds pages the old one missed
+      when clutter crosses the page edge. (The old second pass thresholded at 255 and never fired.)
+- [x] Crop screen opens with the whole straightened page selected (SmartCropper's auto-scan no
+      longer re-crops inside it); the full-crop button first undoes the straighten.
+- [x] `StraightenPipelineTest`: 40 synthetic phone photos (dark, light, near-white desk with
+      shadow, clutter over the page edges; +/-15 degree tilt plus keystone), residual tilt
+      measured exactly from the ground-truth geometry. All within 1 degree (worst 0.63); a
+      400-photo sweep at camera resolution also passed (worst 0.74, mean 0.23).
+- [x] `RealPhotoBenchmarkTest` + `testdata/README.md`: runs annotated real photos from
+      `testdata/pages/` (skipped while empty).
 
-Status: implemented; library unit tests pass on desktop OpenCV. The app module has not been built
-or run on a device yet (no Android SDK where this was written), so the on-device "done when" check
-below is still open.
+Status: implemented and passing on the JVM. Not yet built with Gradle or run on a device: the
+environment this was written in has no access to the Android SDK or Google Maven. `scanlibrary`
+and `DocumentStraightener` were compiled against the Android 17 framework classes; the activity
+changes were reviewed but not compiled. Open: `./gradlew :scanlibrary:testDebugUnitTest
+:app:assembleDebug`, then the on-device check below with real photos in `testdata/pages/`.
 
 Done when: 20 test photos (tilted, rotated, on dark and light desks) all come out within 1° of
 upright and the user never needs the crop screen for a plain A4 page.
