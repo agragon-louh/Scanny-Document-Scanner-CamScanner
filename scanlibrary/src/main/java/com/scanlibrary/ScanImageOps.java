@@ -20,13 +20,8 @@ import java.util.List;
  * Document filters and edge detection on OpenCV {@link Mat}s.
  *
  * <p>Java port of the former {@code jni/scan.cpp} (built against a 2017 OpenCV 3 prebuilt).
- * The filters keep their parameters and quirks so scans look the same:</p>
- * <ul>
- *     <li>Input Mats are 4-channel images in Android bitmap memory order (RGBA).</li>
- *     <li>The gray and black-and-white filters convert with BGR weights, exactly like the
- *     native code did on RGBA data.</li>
- *     <li>The magic-colour contrast stretch also applies to the alpha channel.</li>
- * </ul>
+ * Input Mats are 4-channel images in Android bitmap memory order (RGBA). The enhancement
+ * filters (Magic Color, Gray, B&amp;W) moved to {@link ScanFilters} in phase 2.</p>
  *
  * <p>Page detection ({@link #detectPage}) and auto-straighten ({@link #straighten}) are new; the
  * native single-channel contour search they replace missed pages with clutter on the edges.</p>
@@ -38,24 +33,13 @@ public final class ScanImageOps {
     private ScanImageOps() {
     }
 
-    /** Contrast stretch: {@code dst = saturate(1.9 * src - 80)} on every channel. */
-    public static Mat magicColor(Mat rgba) {
-        Mat dst = new Mat();
-        rgba.convertTo(dst, -1, 1.9, -80);
-        return dst;
-    }
-
-    /** Single-channel gray image (BGR weights applied to RGBA data, as before). */
+    /**
+     * Single-channel gray image (BGR weights applied to RGBA data, as the native code did). Used
+     * for skew estimation; the user-facing Gray filter is {@link ScanFilters#gray}.
+     */
     public static Mat gray(Mat rgba) {
         Mat dst = new Mat();
         Imgproc.cvtColor(rgba, dst, Imgproc.COLOR_BGRA2GRAY);
-        return dst;
-    }
-
-    /** {@link #gray} followed by an Otsu threshold: every pixel is 0 or 255. */
-    public static Mat blackAndWhite(Mat rgba) {
-        Mat dst = gray(rgba);
-        Imgproc.threshold(dst, dst, 0, 255, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
         return dst;
     }
 

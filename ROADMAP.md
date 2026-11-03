@@ -65,16 +65,41 @@ upright and the user never needs the crop screen for a plain A4 page.
 
 Goal: the "Magic Color" result looks like a photocopy, not a photo.
 
-- [ ] Background division: estimate the paper background with a large median or morphological
-      close, divide the image by it, normalise. Removes shadows and uneven lighting.
-- [ ] Adaptive threshold (`adaptiveThreshold`, Gaussian, block size tuned to image size) for the
-      B&W mode instead of global Otsu.
-- [ ] Unsharp mask on text after whitening.
-- [ ] Colour-preserving "magic" mode: whiten the background, keep stamps and highlights in colour
-      (saturation-weighted blend).
-- [ ] Noise removal (`fastNlMeansDenoising` on low-light scans, gated on measured noise).
-- [ ] Rewrite `ColorFilter` / `CurrentFilterActivity` previews to run on downscaled thumbnails so
-      switching filters is instant; full-size filter only on save.
+All in `ScanFilters` (scanlibrary), plain OpenCV, unit-tested on the JVM.
+
+- [x] Background division: paper brightness estimated on a 256 px copy (grey close wider than
+      text strokes, median, light Gaussian), image divided by it. Removes shadows, uneven light and
+      the colour cast of the light. Dark printed areas larger than the kernel (photos, banners) are
+      detected (background below 40% of paper level) and inpainted from the surrounding paper
+      first, so they are not washed out. The white point sits 3 noise-sigmas below paper level.
+- [x] B&W: Gaussian adaptive threshold (block ~1/40 of the page) on the whitened luminance, with
+      the margin C growing with the remaining noise, OR a global threshold just below white (safe
+      after division; keeps wide and faint strokes solid instead of hollow).
+- [x] Unsharp mask after whitening (radius scales with image size) in Magic Color and Gray.
+- [x] Colour-preserving Magic Color: neutral pixels take their luminance (crisp, no colour
+      fringes), coloured ones (stamps, highlighter, pen) keep their colour; blend weight from chroma
+      (max - min channel; HSV saturation is unstable for dark ink).
+- [x] Noise removal: noise measured on paper blocks (blur residual, robust to JPEG); above 4 levels,
+      non-local means on luminance and a median on chroma.
+- [x] `CurrentFilterActivity` previews run on a <=1600 px copy; the selected filter is applied to the
+      full page once, while saving. The editor's filter strip (`ColorFilterAdapter`) renders cached
+      256 px thumbnails instead of 12 full-size bitmaps per refresh, and `ColorFilter` releases its
+      RenderScript objects. The crop screen still filters at full size (it crops the filtered
+      bitmap).
+- [x] `ScanFiltersTest` + `DegradedPage`: synthetic page with text, heading, red stamp,
+      highlighter, blue signature and a dark photo, photographed with a soft shadow, fall-off, warm
+      cast, noise and JPEG; scored against its ground-truth masks. Normal and low-light pages pass
+      (paper >= 250 including in the shadow, text <= 40, colours kept, photo stays dark, B&W paper
+      and text errors < 0.1%); a 60-page sweep with random exposure, shadow, cast, noise and JPEG
+      quality also passes. The old filters fail the same page (Otsu turns the shadow black).
+
+Status: implemented and passing on the JVM; app changes compiled where possible (DocumentFilter,
+ColorFilter) and parse-checked otherwise. Not built with Gradle or run on a device (no Android SDK
+or Google Maven access where this was written). Full-size Magic Color takes ~0.2 s on a desktop
+(~0.4-0.7 s with denoise); expect several times that on a phone.
+
+Known limits: a shadow darker than 40% of the paper level is treated as print and not removed;
+a uniformly coloured sheet (sticky note) comes out white.
 
 Done when: side-by-side with CamScanner on the same five receipts and five printed pages, a
 reviewer cannot pick which is which more than 6 times out of 10.

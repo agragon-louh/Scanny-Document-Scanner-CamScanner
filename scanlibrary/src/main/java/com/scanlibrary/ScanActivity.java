@@ -91,15 +91,15 @@ public class ScanActivity extends Activity implements IScanner, ComponentCallbac
     }
 
     public static Bitmap getGrayBitmap(Bitmap bitmap) {
-        return filter(bitmap, ScanImageOps::gray);
+        return filter(bitmap, ScanFilters::gray);
     }
 
     public static Bitmap getMagicColorBitmap(Bitmap bitmap) {
-        return filter(bitmap, ScanImageOps::magicColor);
+        return filter(bitmap, ScanFilters::magicColor);
     }
 
     public static Bitmap getBWBitmap(Bitmap bitmap) {
-        return filter(bitmap, ScanImageOps::blackAndWhite);
+        return filter(bitmap, ScanFilters::blackAndWhite);
     }
 
     /** Document corners as {@code [x1, x2, x3, x4, y1, y2, y3, y4]}, or null for non-ARGB_8888 input. */

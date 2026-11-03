@@ -26,14 +26,6 @@ public class ScanImageOpsTest {
     }
 
     @Test
-    public void magicColorIsSaturatedContrastStretchOnAllChannels() {
-        Mat out = ScanImageOps.magicColor(pixel(100, 10, 200, 255));
-        assertEquals(CvType.CV_8UC4, out.type());
-        // 1.9 * v - 80, saturated to [0, 255]; alpha included, as in the native code.
-        assertArrayEquals(new double[]{110, 0, 255, 255}, out.get(0, 0), 0);
-    }
-
-    @Test
     public void grayUsesBgrWeightsOnRgbaData() {
         // The native code ran BGR2GRAY on RGBA bitmaps, so red gets the blue weight (0.114).
         Mat red = ScanImageOps.gray(pixel(255, 0, 0, 255));
@@ -41,22 +33,6 @@ public class ScanImageOpsTest {
         assertEquals(CvType.CV_8UC1, red.type());
         assertEquals(29, red.get(0, 0)[0], 1);
         assertEquals(76, blue.get(0, 0)[0], 1);
-    }
-
-    @Test
-    public void blackAndWhiteIsBinary() {
-        Mat img = new Mat(40, 40, CvType.CV_8UC4, new Scalar(40, 40, 40, 255));
-        Imgproc.rectangle(img, new Rect(0, 0, 20, 40), new Scalar(220, 220, 220, 255), -1);
-        Mat bw = ScanImageOps.blackAndWhite(img);
-        assertEquals(CvType.CV_8UC1, bw.type());
-        assertEquals(255, bw.get(10, 5)[0], 0);
-        assertEquals(0, bw.get(10, 35)[0], 0);
-        for (int y = 0; y < bw.rows(); y++) {
-            for (int x = 0; x < bw.cols(); x++) {
-                double v = bw.get(y, x)[0];
-                assertTrue(v == 0 || v == 255);
-            }
-        }
     }
 
     @Test

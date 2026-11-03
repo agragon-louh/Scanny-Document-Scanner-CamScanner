@@ -15,12 +15,12 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.github.chrisbanes.photoview.PhotoView;
-import com.scanlibrary.ScanActivity;
 import com.scanny.scanner.R;
 import com.scanny.scanner.db.DBHelper;
 import com.scanny.scanner.main_utils.AppStorage;
 import com.scanny.scanner.main_utils.BitmapUtils;
 import com.scanny.scanner.main_utils.Constant;
+import com.scanny.scanner.main_utils.DocumentFilter;
 import com.scanny.scanner.models.DBModel;
 import com.scanny.scanner.utils.NavigationUtils;
 
@@ -37,6 +37,12 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
     // True when the saved page started a new folder, so Delete on the next screen removes the folder.
     public boolean created_new_group;
     public Bitmap tempBitmap;
+    /** Downscaled copy of {@link #original} that filter previews run on (see DocumentFilter). */
+    private Bitmap preview;
+    /** The filter currently shown; applied to the full-size page when it is saved. */
+    private int selectedFilter = DocumentFilter.ORIGINAL;
+    /** Increments with every filter tap, so a slow earlier preview cannot overwrite a later one. */
+    private int previewRequest;
     protected ImageView iv_back;
     protected ImageView iv_done;
     protected TextView iv_ocv_black;
@@ -106,6 +112,7 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
         iv_ocv_black = (TextView) findViewById(R.id.iv_ocv_black);
         if (Constant.original != null) {
             original = Constant.original;
+            preview = DocumentFilter.downscale(original, DocumentFilter.PREVIEW_SIDE);
             iv_preview_filter.setImageBitmap(original);
         }
 
@@ -117,167 +124,100 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
             case R.id.iv_back:
                 onBackPressed();
                 return;
-            case R.id.iv_color:
-                showProgressDialog();
-                AsyncTask.execute(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            tempBitmap = ScanActivity.getMagicColorBitmap(original);
-                        } catch (OutOfMemoryError e) {
-                            runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    tempBitmap = original;
-                                    iv_preview_filter.setImageBitmap(original);
-                                    e.printStackTrace();
-                                    dismissProgressDialog();
-                                }
-                            });
-                        }
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                iv_preview_filter.setImageBitmap(tempBitmap);
-                                dismissProgressDialog();
-                            }
-                        });
-                    }
-                });
-                iv_original.setBackgroundResource(R.drawable.filter_bg);
-                iv_original.setTextColor(getResources().getColor(R.color.black));
-
-                iv_color.setBackgroundResource(R.drawable.filter_selection_bg);
-                iv_color.setTextColor(getResources().getColor(R.color.white));
-
-                iv_sharp_black.setBackgroundResource(R.drawable.filter_bg);
-                iv_sharp_black.setTextColor(getResources().getColor(R.color.black));
-
-                iv_ocv_black.setBackgroundResource(R.drawable.filter_bg);
-                iv_ocv_black.setTextColor(getResources().getColor(R.color.black));
-                return;
-            case R.id.iv_done:
-                if (!Constant.current_camera_view.equals("ID Card") || !Constant.card_type.equals("Single")) {
-                    Constant.original = tempBitmap;
-                    if (Constant.original == null) {
-                        Constant.original = original;
-                    }
-                    new insertGroup().execute(new Bitmap[]{Constant.original});
-                    return;
-                }
-                Constant.singleSideBitmap = tempBitmap;
-                if (Constant.singleSideBitmap == null) {
-                    Constant.singleSideBitmap = original;
-                }
-                Constant.IdentifyActivity = "IDCardPreviewActivity2";
-                NavigationUtils.jumpNextActivity(CurrentFilterActivity.this);
-                return;
-            case R.id.iv_ocv_black:
-                showProgressDialog();
-                AsyncTask.execute(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            tempBitmap = ScanActivity.getBWBitmap(original);
-                        } catch (OutOfMemoryError e) {
-                            runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    tempBitmap = original;
-                                    iv_preview_filter.setImageBitmap(original);
-                                    e.printStackTrace();
-                                    dismissProgressDialog();
-                                }
-                            });
-                        }
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                iv_preview_filter.setImageBitmap(tempBitmap);
-                                dismissProgressDialog();
-                            }
-                        });
-                    }
-                });
-
-                iv_original.setBackgroundResource(R.drawable.filter_bg);
-                iv_original.setTextColor(getResources().getColor(R.color.black));
-
-                iv_color.setBackgroundResource(R.drawable.filter_bg);
-                iv_color.setTextColor(getResources().getColor(R.color.black));
-
-                iv_sharp_black.setBackgroundResource(R.drawable.filter_bg);
-                iv_sharp_black.setTextColor(getResources().getColor(R.color.black));
-
-                iv_ocv_black.setBackgroundResource(R.drawable.filter_selection_bg);
-                iv_ocv_black.setTextColor(getResources().getColor(R.color.white));
-
-                return;
             case R.id.iv_original:
-                try {
-                    showProgressDialog();
-                    tempBitmap = original;
-                    iv_preview_filter.setImageBitmap(original);
-                    dismissProgressDialog();
-                } catch (OutOfMemoryError e) {
-                    e.printStackTrace();
-                    dismissProgressDialog();
-                }
-
-                iv_original.setBackgroundResource(R.drawable.filter_selection_bg);
-                iv_original.setTextColor(getResources().getColor(R.color.white));
-
-                iv_color.setBackgroundResource(R.drawable.filter_bg);
-                iv_color.setTextColor(getResources().getColor(R.color.black));
-
-                iv_sharp_black.setBackgroundResource(R.drawable.filter_bg);
-                iv_sharp_black.setTextColor(getResources().getColor(R.color.black));
-
-                iv_ocv_black.setBackgroundResource(R.drawable.filter_bg);
-                iv_ocv_black.setTextColor(getResources().getColor(R.color.black));
+                showFilter(DocumentFilter.ORIGINAL, iv_original);
+                return;
+            case R.id.iv_color:
+                showFilter(DocumentFilter.MAGIC_COLOR, iv_color);
                 return;
             case R.id.iv_sharp_black:
+                showFilter(DocumentFilter.GRAY, iv_sharp_black);
+                return;
+            case R.id.iv_ocv_black:
+                showFilter(DocumentFilter.BLACK_WHITE, iv_ocv_black);
+                return;
+            case R.id.iv_done:
+                if (original == null) {
+                    return;
+                }
+                if (!Constant.current_camera_view.equals("ID Card") || !Constant.card_type.equals("Single")) {
+                    // insertGroup applies the selected filter to the full-size page while saving.
+                    Constant.original = original;
+                    new insertGroup(selectedFilter).execute(new Bitmap[]{original});
+                    return;
+                }
                 showProgressDialog();
+                final int filter = selectedFilter;
                 AsyncTask.execute(new Runnable() {
                     @Override
                     public void run() {
+                        Bitmap full;
                         try {
-                            tempBitmap = ScanActivity.getGrayBitmap(original);
+                            full = DocumentFilter.apply(filter, original);
                         } catch (OutOfMemoryError e) {
-                            runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    tempBitmap = original;
-                                    iv_preview_filter.setImageBitmap(original);
-                                    e.printStackTrace();
-                                    dismissProgressDialog();
-                                }
-                            });
+                            full = original;
                         }
+                        final Bitmap result = full;
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
-                                iv_preview_filter.setImageBitmap(tempBitmap);
                                 dismissProgressDialog();
+                                if (isFinishing() || isDestroyed()) {
+                                    return;
+                                }
+                                Constant.singleSideBitmap = result;
+                                Constant.IdentifyActivity = "IDCardPreviewActivity2";
+                                NavigationUtils.jumpNextActivity(CurrentFilterActivity.this);
                             }
                         });
                     }
                 });
-                iv_original.setBackgroundResource(R.drawable.filter_bg);
-                iv_original.setTextColor(getResources().getColor(R.color.black));
-
-                iv_color.setBackgroundResource(R.drawable.filter_bg);
-                iv_color.setTextColor(getResources().getColor(R.color.black));
-
-                iv_sharp_black.setBackgroundResource(R.drawable.filter_selection_bg);
-                iv_sharp_black.setTextColor(getResources().getColor(R.color.white));
-
-                iv_ocv_black.setBackgroundResource(R.drawable.filter_bg);
-                iv_ocv_black.setTextColor(getResources().getColor(R.color.black));
                 return;
             default:
                 return;
         }
+    }
+
+    /**
+     * Shows {@code filter} applied to the downscaled preview and highlights its button. The preview
+     * is a fraction of the page's pixels, so this is near-instant; the full-size page is filtered
+     * once, on save.
+     */
+    private void showFilter(final int filter, TextView selectedButton) {
+        selectedFilter = filter;
+        for (TextView button : new TextView[]{iv_original, iv_color, iv_sharp_black, iv_ocv_black}) {
+            boolean selected = button == selectedButton;
+            button.setBackgroundResource(selected ? R.drawable.filter_selection_bg : R.drawable.filter_bg);
+            button.setTextColor(getResources().getColor(selected ? R.color.white : R.color.black));
+        }
+        final int request = ++previewRequest;
+        if (filter == DocumentFilter.ORIGINAL || preview == null) {
+            tempBitmap = original;
+            iv_preview_filter.setImageBitmap(original);
+            return;
+        }
+        AsyncTask.execute(new Runnable() {
+            @Override
+            public void run() {
+                Bitmap shown;
+                try {
+                    shown = DocumentFilter.apply(filter, preview);
+                } catch (OutOfMemoryError e) {
+                    shown = preview;
+                }
+                final Bitmap result = shown;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (request != previewRequest || isFinishing() || isDestroyed()) {
+                            return; // a later tap superseded this one
+                        }
+                        tempBitmap = result;
+                        iv_preview_filter.setImageBitmap(result);
+                    }
+                });
+            }
+        });
     }
 
     private void showProgressDialog() {
@@ -302,8 +242,13 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
         String group_date;
         String group_name;
         ProgressDialog progressDialog;
+        /** Filter to apply to the full-size page before it is written. */
+        final int filter;
+        /** The page as saved (filtered); becomes Constant.original for the next screen. */
+        Bitmap saved;
 
-        private insertGroup() {
+        private insertGroup(int filter) {
+            this.filter = filter;
         }
 
         @Override
@@ -319,10 +264,16 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
 
         @Override
         public Bitmap doInBackground(Bitmap... bitmapArr) {
-            Bitmap bitmap = Constant.original;
+            Bitmap bitmap = bitmapArr.length > 0 ? bitmapArr[0] : null;
             if (bitmap == null) {
                 return null;
             }
+            try {
+                bitmap = DocumentFilter.apply(filter, bitmap);
+            } catch (OutOfMemoryError e) {
+                // Save the unfiltered page rather than nothing.
+            }
+            saved = bitmap;
             byte[] bytes = BitmapUtils.getBytes(bitmap);
             File file = BitmapUtils.writeImageFile(AppStorage.documentsDir(CurrentFilterActivity.this), bytes);
             if (file == null) {
@@ -351,6 +302,9 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
             if (saveFailed) {
                 Toast.makeText(CurrentFilterActivity.this, R.string.page_save_failed, Toast.LENGTH_LONG).show();
                 return;
+            }
+            if (saved != null) {
+                Constant.original = saved;
             }
             selected_group_name = group_name;
             current_docs_name = this.current_doc_name;
