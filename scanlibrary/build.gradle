@@ -11,17 +11,14 @@ android {
         consumerProguardFiles 'proguard-rules.pro'
     }
 
-    // Prebuilt native libraries (OpenCV + libScanner.so). The NDK sources in src/main/jni are
-    // not built by Gradle; see FABLE_REVIEW.md about rebuilding them with 16 KB alignment.
-    sourceSets {
-        main {
-            jniLibs.srcDirs = ['src/main/libs']
-        }
-    }
-
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+
+    testOptions {
+        // ScanImageOpsTest runs the filters on the JVM with the desktop OpenCV build below.
+        unitTests.returnDefaultValues = true
     }
 
     buildTypes {
@@ -33,4 +30,17 @@ android {
 
 dependencies {
     implementation 'androidx.core:core:1.16.0'
+    // OpenCV 4 (Java API + 16 KB-aligned native libraries). Replaces the 2017 OpenCV 3 prebuilt
+    // libopencv_java3.so and the custom libScanner.so that used to be checked in.
+    implementation 'org.opencv:opencv:4.14.0'
+
+    testImplementation 'junit:junit:4.13.2'
+    // Desktop OpenCV with bundled native libraries, for JVM unit tests only.
+    testImplementation 'org.openpnp:opencv:4.9.0-0'
+}
+
+// The Android OpenCV classes cannot load their native library on the JVM; unit tests use the
+// openpnp desktop build of the same Java API instead.
+configurations.matching { it.name.endsWith('UnitTestRuntimeClasspath') }.configureEach {
+    exclude group: 'org.opencv', module: 'opencv'
 }

@@ -47,9 +47,9 @@
     @android.webkit.JavascriptInterface <methods>;
 }
 
-# OpenCV JNI bridge in :scanlibrary (native code looks these up by name).
--keep class com.scanlibrary.** { *; }
+# OpenCV 4 Java API (org.opencv:opencv): its JNI library binds to these classes by name.
 -keep class org.opencv.** { *; }
+-keep class com.scanlibrary.** { *; }
 
 # jsoup references the optional re2j regex engine, which is not bundled.
 -dontwarn com.google.re2j.**

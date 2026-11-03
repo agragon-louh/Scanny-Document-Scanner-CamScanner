@@ -17,10 +17,9 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
-            // ARM only. The x86_64 builds of libScanner, OpenCV 3, SmartCropper and TFLite are
-            // 4 KB page-aligned, which Google Play rejects for targetSdk 35+ (16 KB requirement).
-            // x86/x86_64 are emulator-only; re-add once those libraries ship 16 KB-aligned builds.
-            // (The unused x86/x86_64 copies of libScanner/OpenCV were deleted from :scanlibrary.)
+            // ARM only. The x86_64 builds of SmartCropper and TFLite are 4 KB page-aligned, which
+            // Google Play rejects for targetSdk 35+ (16 KB requirement). x86/x86_64 are
+            // emulator-only; re-add once those libraries ship 16 KB-aligned builds.
             abiFilters 'armeabi-v7a', 'arm64-v8a'
         }
     }

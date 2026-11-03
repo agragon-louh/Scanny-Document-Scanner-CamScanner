@@ -24,10 +24,17 @@ surface. Nothing found is remotely exploitable without user interaction.
 | N5 | Fixed | `checkReleaseBuilds true`, `abortOnError true`, with `app/lint-baseline.xml` recording the 1,010 pre-existing issues. `lintRelease` passes with no new issues. The baseline's only security entries are `TrustAllX509TrustManager` inside the bcpkix jar (a BouncyCastle utility class the app never calls) and three API-level warnings in `ImagePicker` that are guarded at runtime. |
 | N6 | Fixed | `requestLegacyExternalStorage` removed. Exports on Android 10 go through `MediaStore.Downloads` (`ExportStorage`); Android 9 and older use WRITE_EXTERNAL_STORAGE, now `maxSdkVersion 28`; Android 11+ writes its own files directly as before. Image exports no longer overwrite a file with the same timestamp. |
 | N8 | Hardened | Added `android:fullBackupContent="false"` so pre-Android 12 devices are covered explicitly; device-to-device transfer left as designed. |
-| N9 | Partly | Unused `x86`/`x86_64` copies of `libScanner.so` and `libopencv_java3.so` deleted. Rebuilding on OpenCV 4 needs the NDK sources rebuilt and is not done. |
-| N7, N10, N11 | No change | N7 is a privacy-policy text change on flycricket.io. N10 would need a git history rewrite, which is destructive and gains nothing security-wise. N11 needed no action. |
+| N9 | Fixed | The five native functions of `libScanner.so` were ported to the OpenCV 4 Java API (`ScanImageOps`, same parameters and quirks; `ScanActivity` keeps its method signatures). OpenCV now comes from Maven Central (`org.opencv:opencv:4.14.0`, no OSV advisories). The checked-in OpenCV 3 SDK, `scan.cpp` and all prebuilt `.so` files (680 files, ~335 MB) are deleted. All arm64 libraries in the release APK are 16 KB-aligned. `ScanImageOpsTest` (6 JVM tests on desktop OpenCV) covers every filter and the corner detection. Cost: the release APK grew from 52 to 73 MB because `libopencv_java4.so` is larger than the old OpenCV 3 build. |
+| N7 | Fixed | The in-app policy no longer loads `scanny.flycricket.io`: that page was written for another developer, carried a sponsored ad, still described AdMob and log collection, and listed admin@admin.com as the contact. An accurate policy is bundled (`res/raw/privacy_policy.html`) and shown in a WebView with JavaScript, file/content access and network loads disabled; links open in the browser. With nothing else using the network, `INTERNET` and `ACCESS_NETWORK_STATE` were removed, and no library adds them back. **Before release:** set `privacy_contact_email` in `strings.xml` (otherwise the policy points to the Play listing contact), and host the same HTML at a public URL for the Play Console. |
+| N10 | Not done, needs a decision | Removing `Scanny-debug.apk` from history means rewriting every commit since `acb177f` and force-pushing `main`. It holds no secrets, so this is a repository-size cleanup, not a security fix. |
+| N11 | No change | Superseded by N7: the remote page is no longer used. |
 
-Not verified on a device: no emulator or phone was attached. The Android 10 MediaStore export path and the R8-shrunk PDFBox encryption in the release APK have only been compiled and inspected (the encryption classes are present in the release dex), not run.
+Not verified on a device: no emulator or phone was attached. These have only been compiled, unit-tested on the JVM, and inspected in the release APK, not run on Android:
+
+- the Android 10 MediaStore export path;
+- the R8-shrunk PDFBox encryption;
+- the OpenCV 4 filters on real camera images (compare Magic Color, B&W and Gray output with the previous build);
+- the bundled privacy-policy screen.
 
 ## 2. Findings
 

@@ -3,8 +3,10 @@
     xmlns:tools="http://schemas.android.com/tools">
     <!-- package/namespace is set in app/build.gradle (required by AGP 8+). -->
 
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!--
+        No INTERNET or ACCESS_NETWORK_STATE: the app works offline and the privacy policy is
+        bundled. Scans therefore cannot leave the device except through an explicit share.
+    -->
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- The app shows no ads; make sure no library brings the advertising-ID permission back. -->
     <uses-permission
