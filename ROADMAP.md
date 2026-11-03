@@ -144,12 +144,46 @@ SmartCropper baseline measured first.
 
 Goal: book spreads come out flat, like CamScanner's book mode.
 
-- [ ] Start with a geometric approach: detect the top and bottom text-line curves, fit
-      polynomials, build a mesh, `remap` to flatten. Works for single-axis curl, which covers
-      most books.
-- [ ] Split a spread into two pages at the spine (vertical intensity valley).
-- [ ] If the geometric result is not good enough: a learned unwarp model (DocUNet, DewarpNet,
-      DocTr) in TFLite. These are heavy (100 MB+); ship as an on-demand download.
+All in `BookScan` (scanlibrary), plain OpenCV, unit-tested on the JVM.
+
+- [x] Geometric single-axis model: a page bends along the spine only, so a perspective camera sees
+      every column magnified by its own factor and a text line at flat height Y appears at
+      `y(x) = a(x) + b(x) * Y`. Text lines are detected (ink merged into line blobs; tall
+      structures such as page edges and the desk removed first; bands touching the frame and
+      over-thick blobs rejected), tracked per column with a local quadratic, then `a` and `b` are
+      fitted per column across all lines (`b` only where the lines span 30% of the text height,
+      `a` wherever any line is), smoothed locally, normalised where the page is flattest, and the
+      page is remapped. Local fits, not global polynomials: the curl next to the spine is too steep
+      for a cubic.
+- [x] Squash near the spine: from `b(x)` and the focal length, the page's lift
+      `z = f (1 - 1/b)` and the true distance along the surface follow; columns between the spine
+      and the flat part are resampled by arc length. The focal length comes from the photo's
+      EXIF `FocalLengthIn35mmFilm` (0.8 x the long side assumed when missing).
+- [x] Spine: widest text-free band in the middle (ink measured by black-hat, so the gutter shadow
+      is not mistaken for ink; the dark line where the pages meet is bridged), darkest column in
+      its inner part, or its centre when there is no shadow.
+- [x] App: Book mode splits at the detected spine instead of exactly half the photo, flattens
+      both pages (following the Auto-straighten setting) in the background save task, and turns
+      them upright (they used to be saved a quarter turn sideways). Falls back to the old halves
+      if processing fails.
+- [ ] Learned unwarp model (DocUNet, DewarpNet, DocTr) as an on-demand download, if the geometric
+      result is not good enough on real books. Not started.
+
+Tests (`BookScanTest`, `SyntheticSpread`): open books rendered by inverting a perspective camera
+over a page that lifts off the spine, with gutter shadow, noise and JPEG, so every text line's
+true curve is known. With the focal length known, 24 pages bent by up to 17 px come out straight
+to within 1.03 px (bar: 2 px), the squash ratio across the text drops from up to 1.41 to at most
+1.14, and the spine is found within 1.5% on every spread. With the focal length unknown (cameras
+0.65-1.0 x long side): straight to 0.90 px, squash at most 1.16. A wider 40-spread sweep (pages
+500-900 px, bends up to 31 px): 79 of 80 pages within 2 px (worst 2.29 px), every spine found;
+on very steep curls the squash ratio stays at 1.16-1.31 (from 1.3-1.6), mostly within ~20 px of
+the text edge next to the spine, where the fit is one-sided.
+
+Status: implemented and passing on the JVM; ScanActivity/BookScan compiled against the Android
+framework, ScannerActivity parse-checked. Not built with Gradle or run on a device. Known limits:
+pages must be held as the viewfinder guide shows (no automatic orientation yet, see phase 7);
+pages with few text lines (under 4) or mostly pictures are only split, not flattened; vertical
+curl (a page bent top to bottom) is not modelled.
 
 Done when: text lines in a scanned paperback spread are straight to within 2 px over the page width.
 

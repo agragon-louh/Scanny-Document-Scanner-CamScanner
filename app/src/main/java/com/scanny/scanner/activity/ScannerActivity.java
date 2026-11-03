@@ -180,6 +180,24 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
     private View v_idcard;
     private View v_photo;
 
+    /**
+     * Focal length in pixels for a photo {@code width} x {@code height} decoded from the JPEG at
+     * {@code path}, from its 35 mm-equivalent focal length (EXIF FocalLengthIn35mmFilm, defined
+     * against the 43.27 mm diagonal of 35 mm film); 0 when the tag is missing.
+     */
+    public static double focalLengthPx(String path, int width, int height) {
+        try {
+            // Tag name as a string: ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM needs API 24.
+            int f35 = new ExifInterface(new File(path).getAbsolutePath()).getAttributeInt("FocalLengthIn35mmFilm", 0);
+            if (f35 <= 0) {
+                return 0;
+            }
+            return f35 / 43.27 * Math.hypot(width, height);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     public static int getCameraPhotoOrientation(String str) {
         try {
             int attributeInt = new ExifInterface(new File(str).getAbsolutePath()).getAttributeInt(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, 1);
@@ -400,15 +418,17 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                                 fileOutputStream2.close();
                                 Bitmap scalePreserveRatio2 = decodeHalfSize(data);
                                 int cameraPhotoOrientation2 = getCameraPhotoOrientation(file2.getPath());
+                                double focalPx = focalLengthPx(file2.getPath(), scalePreserveRatio2.getWidth(), scalePreserveRatio2.getHeight());
                                 file2.delete();
                                 Matrix matrix2 = new Matrix();
                                 matrix2.postRotate((float) cameraPhotoOrientation2);
                                 Constant.bookBitmap = Bitmap.createBitmap(scalePreserveRatio2, 0, 0, scalePreserveRatio2.getWidth(), scalePreserveRatio2.getHeight(), matrix2, true);
                                 bitmapList.clear();
                                 bookImgList.clear();
-                                bitmapList.add(Bitmap.createBitmap(Constant.bookBitmap, 0, 0, Constant.bookBitmap.getWidth(), Constant.bookBitmap.getHeight() / 2));
-                                bitmapList.add(Bitmap.createBitmap(Constant.bookBitmap, 0, Constant.bookBitmap.getHeight() / 2, Constant.bookBitmap.getWidth(), Constant.bookBitmap.getHeight() / 2));
-                                new insertBookGroup().execute(new Bitmap[]{Constant.bookBitmap});
+                                progressBar.setVisibility(View.VISIBLE);
+                                // insertBookGroup splits the spread at the spine and flattens the pages
+                                // in the background before saving them.
+                                new insertBookGroup(focalPx, DocumentStraightener.isEnabled(ScannerActivity.this)).execute(new Bitmap[]{Constant.bookBitmap});
                             } catch (IOException e2) {
                                 Log.w(TAG, "Cannot write to " + file2, e2);
                             }
@@ -1245,7 +1265,13 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
         String group_date;
         String group_name;
 
-        private insertBookGroup() {
+        /** Camera focal length in pixels (0 if unknown) and whether to flatten the pages. */
+        final double focalPx;
+        final boolean dewarp;
+
+        private insertBookGroup(double focalPx, boolean dewarp) {
+            this.focalPx = focalPx;
+            this.dewarp = dewarp;
         }
 
         @Override
@@ -1255,6 +1281,28 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
 
         @Override
         public Bitmap doInBackground(Bitmap... bitmapArr) {
+            Bitmap spread = bitmapArr.length > 0 ? bitmapArr[0] : null;
+            Bitmap[] pages = null;
+            if (spread != null) {
+                try {
+                    pages = ScanActivity.getBookPages(spread, dewarp, focalPx);
+                } catch (Throwable t) { // OutOfMemoryError, native library problems
+                    Log.w(TAG, "Book split failed, saving the two halves", t);
+                    pages = null;
+                }
+                if (pages == null) {
+                    // Previous behaviour: top and bottom halves of the photo as they are.
+                    pages = new Bitmap[]{
+                            Bitmap.createBitmap(spread, 0, 0, spread.getWidth(), spread.getHeight() / 2),
+                            Bitmap.createBitmap(spread, 0, spread.getHeight() / 2, spread.getWidth(), spread.getHeight() / 2)};
+                }
+            }
+            bitmapList.clear();
+            if (pages != null) {
+                for (Bitmap page : pages) {
+                    bitmapList.add(page);
+                }
+            }
             for (int i = 0; i < bitmapList.size(); i++) {
                 if (bitmapList.get(i) != null) {
                     byte[] bytes = BitmapUtils.getBytes(bitmapList.get(i));

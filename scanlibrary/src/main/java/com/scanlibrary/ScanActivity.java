@@ -90,6 +90,41 @@ public class ScanActivity extends Activity implements IScanner, ComponentCallbac
         }
     }
 
+    /**
+     * Book mode (see {@link BookScan}): splits a photographed spread at the spine and flattens the
+     * curl of both pages.
+     *
+     * @param photo   the spread as Book mode captures it: spine across the middle, left page at the
+     *                top, both pages turned a quarter turn clockwise (as the viewfinder guide shows)
+     * @param dewarp  flatten the pages (otherwise only split at the detected spine)
+     * @param focalPx camera focal length in pixels of {@code photo}, or 0 if unknown
+     * @return {@code {left, right}} pages, upright; null for non-ARGB_8888 input
+     */
+    public static Bitmap[] getBookPages(Bitmap photo, boolean dewarp, double focalPx) {
+        if (photo == null || photo.getConfig() != Bitmap.Config.ARGB_8888) {
+            return null;
+        }
+        Mat src = new Mat();
+        Mat[] pages = null;
+        try {
+            Utils.bitmapToMat(photo, src);
+            pages = BookScan.splitCaptured(src, dewarp, focalPx);
+            Bitmap[] out = new Bitmap[pages.length];
+            for (int i = 0; i < pages.length; i++) {
+                out[i] = Bitmap.createBitmap(pages[i].cols(), pages[i].rows(), Bitmap.Config.ARGB_8888);
+                Utils.matToBitmap(pages[i], out[i]);
+            }
+            return out;
+        } finally {
+            src.release();
+            if (pages != null) {
+                for (Mat p : pages) {
+                    p.release();
+                }
+            }
+        }
+    }
+
     public static Bitmap getGrayBitmap(Bitmap bitmap) {
         return filter(bitmap, ScanFilters::gray);
     }
