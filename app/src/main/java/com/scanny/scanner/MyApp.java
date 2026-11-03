@@ -6,13 +6,11 @@ import android.content.SharedPreferences;
 
 import androidx.appcompat.app.AppCompatDelegate;
 
-import com.onesignal.OneSignal;
 import com.scanny.scanner.main_utils.Constant;
 
 import me.pqpo.smartcropperlib.SmartCropper;
 
 public class MyApp extends Application {
-    private static final String ONESIGNAL_APP_ID = "########-####-####-####-############";
     private static MyApp instance;
 
     public static MyApp getInstance() {
@@ -29,12 +27,9 @@ public class MyApp extends Application {
         SharedPreferences sharedPreferences = getSharedPreferences(Constant.PREFS_NAME, Context.MODE_PRIVATE);
         sharedPreferences.edit().putInt(Constant.KEY_THEME, Constant.THEME_DARK).apply();
 
-        // OneSignal (SDK 5.x). Verbose logging was previously forced on in every build, which
-        // leaks push tokens / user ids to logcat; it is now left at the SDK default.
-        // Skip initialisation while the app id is still the template placeholder.
-        if (!ONESIGNAL_APP_ID.contains("#")) {
-            OneSignal.initWithContext(this, ONESIGNAL_APP_ID);
-        }
+        // The OneSignal push SDK was removed: it was never initialised (placeholder app id), but
+        // its manifest still exported receivers/activities and added boot and wake-lock
+        // permissions. Add a push provider back only together with a real app id.
 
         initTheme();
     }

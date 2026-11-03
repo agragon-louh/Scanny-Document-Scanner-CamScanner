@@ -10,7 +10,6 @@ import android.graphics.Rect;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
@@ -36,6 +35,10 @@ import com.itextpdf.text.pdf.ColumnText;
 import com.itextpdf.text.pdf.PdfPageEventHelper;
 import com.itextpdf.text.pdf.PdfWriter;
 import com.scanny.scanner.R;
+import com.scanny.scanner.main_utils.AppStorage;
+import com.scanny.scanner.main_utils.ExportStorage;
+import com.scanny.scanner.main_utils.PdfProtector;
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -314,17 +317,53 @@ public class BaseActivity extends AppCompatActivity {
      * previous copy. Any other mode is a user export to Download/Scanny and never overwrites an
      * existing file. Previously both went to Download/Scanny/&lt;name&gt;.pdf, so opening or
      * sharing a page silently replaced the user's saved export.
+     *
+     * <p>For an export on Android 10 the returned file only carries the exported name: the
+     * file itself was handed to MediaStore and cannot be opened by path.
      */
     public File createPDFfromBitmap(String str, ArrayList<?> arrayList, String str2) {
-        File dir = str2.equals("temp") ? new File(getCacheDir(), "pdf")
-                : new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name));
-        return writePdf(dir, str, arrayList, null, str2.equals("temp"));
+        return writePdf(str, arrayList, null, str2.equals("temp"), null);
     }
 
+    /** Like {@link #createPDFfromBitmap}; exports go to Download/Scanny/Download. */
     public File createProtectedPDFfromBitmap(String str, ArrayList<?> arrayList, String str2, String str3) {
-        File dir = str3.equals("temp") ? new File(getCacheDir(), "pdf")
-                : new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name) + "/Download");
-        return writePdf(dir, str, arrayList, str2, str3.equals("temp"));
+        return writePdf(str, arrayList, str2, str3.equals("temp"), "Download");
+    }
+
+    /**
+     * Saves a page image as a new JPEG in Download/Scanny/Images, where gallery apps find it.
+     * Never overwrites an earlier export.
+     */
+    public void exportImage(Bitmap bitmap) throws IOException {
+        String fileName = System.currentTimeMillis() + ".jpg";
+        if (ExportStorage.needsMediaStore()) {
+            File tmp = new File(AppStorage.shareDir(this), fileName);
+            try {
+                writeJpeg(bitmap, tmp);
+                ExportStorage.publish(this, tmp, "Images", "image/jpeg");
+            } finally {
+                tmp.delete();
+            }
+            return;
+        }
+        File dir = ExportStorage.publicDir(this, "Images");
+        if (!dir.isDirectory() && !dir.mkdirs()) {
+            throw new IOException("Cannot create the export folder");
+        }
+        File file = new File(dir, fileName);
+        for (int i = 1; file.exists(); i++) {
+            file = new File(dir, fileName.replace(".jpg", "_" + i + ".jpg"));
+        }
+        writeJpeg(bitmap, file);
+        saveImageToGallery(file.getPath(), this);
+    }
+
+    private static void writeJpeg(Bitmap bitmap, File file) throws IOException {
+        try (FileOutputStream out = new FileOutputStream(file)) {
+            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)) {
+                throw new IOException("Cannot encode image");
+            }
+        }
     }
 
     /**
@@ -375,13 +414,22 @@ public class BaseActivity extends AppCompatActivity {
         return BitmapFactory.decodeFile(path, options);
     }
 
-    /** {@code pages} holds Bitmaps or image file paths (Strings); paths are decoded one by one. */
-    private File writePdf(File dir, String name, ArrayList<?> pages, String password, boolean replace) {
+    /**
+     * {@code pages} holds Bitmaps or image file paths (Strings); paths are decoded one by one.
+     * {@code temp} files go to the private cache; exports go to Download/Scanny[/exportSub].
+     */
+    private File writePdf(String name, ArrayList<?> pages, String password, boolean temp, String exportSub) {
+        // Android 10 exports are written to the cache first and then handed to MediaStore.
+        boolean viaMediaStore = !temp && ExportStorage.needsMediaStore();
+        File dir = temp ? new File(getCacheDir(), "pdf")
+                : viaMediaStore ? new File(getCacheDir(), "export")
+                : ExportStorage.publicDir(this, exportSub);
+        boolean replace = temp || viaMediaStore;
         File file = null;
-        Document document = new Document();
+        File plain = null;
         try {
-            if (!dir.exists()) {
-                dir.mkdirs();
+            if (!dir.isDirectory() && !dir.mkdirs()) {
+                throw new IOException("Cannot create the PDF folder");
             }
             File target = pdfFileInside(dir, name);
             if (replace) {
@@ -395,11 +443,43 @@ public class BaseActivity extends AppCompatActivity {
             }
             // Only set once the target is ours, so the cleanup below never deletes an old export.
             file = target;
-            PdfWriter writer = PdfWriter.getInstance(document, new FileOutputStream(file));
             if (password == null) {
-                writer.setPageEvent(new HeaderAndFooterOfPDf());
+                renderPdf(file, pages, true);
             } else {
-                writer.setEncryption(password.getBytes(java.nio.charset.StandardCharsets.UTF_8), randomOwnerPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8), PdfWriter.ALLOW_PRINTING, PdfWriter.ENCRYPTION_AES_256);
+                // Rendered unprotected to a private temp file, then encrypted by PDFBox with
+                // AES-256 revision 6 (iText 5 only writes the brute-force-friendly revision 5).
+                plain = File.createTempFile("plain", ".pdf", getCacheDir());
+                renderPdf(plain, pages, false);
+                PDFBoxResourceLoader.init(getApplicationContext());
+                PdfProtector.protect(plain, file, password, randomOwnerPassword());
+            }
+            if (viaMediaStore) {
+                String exportedName = ExportStorage.publish(this, file, exportSub, "application/pdf");
+                file.delete();
+                return new File(ExportStorage.publicDir(this, exportSub), exportedName);
+            }
+            return file;
+        } catch (DocumentException | IOException | RuntimeException e) {
+            Log.e(TAG, "Make Folder to PDF: " + e.getMessage());
+            if (file != null) {
+                file.delete();
+            }
+            return null;
+        } finally {
+            if (plain != null) {
+                plain.delete();
+            }
+        }
+    }
+
+    /** Writes {@code pages} as A4 pages to {@code out} with iText. */
+    private void renderPdf(File out, ArrayList<?> pages, boolean pageNumbers) throws DocumentException, IOException {
+        Document document = new Document();
+        FileOutputStream stream = new FileOutputStream(out);
+        try {
+            PdfWriter writer = PdfWriter.getInstance(document, stream);
+            if (pageNumbers) {
+                writer.setPageEvent(new HeaderAndFooterOfPDf());
             }
             document.open();
             document.addCreationDate();
@@ -431,20 +511,17 @@ public class BaseActivity extends AppCompatActivity {
             if (pageCount == 0) {
                 throw new IOException("No readable pages");
             }
+            // Writes the trailer and closes the stream.
             document.close();
-            return file;
-        } catch (DocumentException | IOException | RuntimeException e) {
-            Log.e(TAG, "Make Folder to PDF: " + e.getMessage());
+        } finally {
             if (document.isOpen()) {
                 try {
                     document.close();
                 } catch (RuntimeException ignored) {
+                    // "The document has no pages" after an early failure.
                 }
             }
-            if (file != null) {
-                file.delete();
-            }
-            return null;
+            stream.close();
         }
     }
 

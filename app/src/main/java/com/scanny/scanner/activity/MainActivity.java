@@ -20,7 +20,6 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.text.method.HideReturnsTransformationMethod;
@@ -66,6 +65,7 @@ import com.scanny.scanner.R;
 import com.scanny.scanner.adapter.AllGroupAdapter;
 import com.scanny.scanner.adapter.DrawerItemAdapter;
 import com.scanny.scanner.db.DBHelper;
+import com.scanny.scanner.main_utils.PdfProtector;
 import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.DBModel;
 import com.scanny.scanner.models.DrawerModel;
@@ -931,6 +931,8 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
             public void onClick(View view) {
                 if (et_enter_pswrd.getText().toString().equals("") || et_confirm_pswrd.getText().toString().equals("")) {
                     Toast.makeText(getApplicationContext(), "Please Enter Password", Toast.LENGTH_SHORT).show();
+                } else if (!PdfProtector.isStrongEnough(et_enter_pswrd.getText().toString())) {
+                    Toast.makeText(getApplicationContext(), "Password must be at least " + PdfProtector.MIN_PASSWORD_LENGTH + " characters", Toast.LENGTH_LONG).show();
                 } else if (!et_enter_pswrd.getText().toString().equals(et_confirm_pswrd.getText().toString())) {
                     Toast.makeText(getApplicationContext(), "Your password & Confirm password do not match.", Toast.LENGTH_LONG).show();
                 } else if (saveOrShare.equals("share")) {
@@ -1408,17 +1410,10 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                     BitmapFactory.Options options = new BitmapFactory.Options();
                     options.inPreferredConfig = Bitmap.Config.ARGB_8888;
                     Bitmap decodeStream = BitmapFactory.decodeStream(new FileInputStream((String) it2.next()), (Rect) null, options);
-                    File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name) + "/Images");
-                    if (!file.exists()) {
-                        file.mkdirs();
-                    }
-                    File file2 = new File(file, System.currentTimeMillis() + ".jpg");
-                    if (file2.exists()) {
-                        file2.delete();
-                    }
                     if (decodeStream != null) {
-                        decodeStream.compress(Bitmap.CompressFormat.JPEG, 100, new FileOutputStream(file2));
-                        saveImageToGallery(file2.getPath(), MainActivity.this);
+                        // Download/Scanny/Images; through MediaStore on Android 10 (ExportStorage).
+                        exportImage(decodeStream);
+                        decodeStream.recycle();
                     }
                 }
             } catch (IOException e) {

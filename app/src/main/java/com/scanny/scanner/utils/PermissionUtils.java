@@ -20,7 +20,9 @@ import java.util.List;
  *
  * <ul>
  *     <li>Gallery import uses the system photo picker and needs no permission.</li>
- *     <li>Writing to Download/Scanny needs WRITE_EXTERNAL_STORAGE only up to API 29.</li>
+ *     <li>Writing to Download/Scanny needs WRITE_EXTERNAL_STORAGE only up to API 28. API 29
+ *     exports through MediaStore (the app no longer opts out of scoped storage) and API 30+
+ *     writes its own files directly (see ExportStorage).</li>
  *     <li>READ_EXTERNAL_STORAGE is still requested on API 30-32 so files created by a previous
  *     install remain readable; from API 33 the app only reads files it created itself.</li>
  * </ul>
@@ -33,7 +35,7 @@ public final class PermissionUtils {
     public static String[] storageAndCameraPermissions() {
         List<String> permissions = new ArrayList<>();
         permissions.add(Manifest.permission.CAMERA);
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
             permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE);
             permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
         } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
