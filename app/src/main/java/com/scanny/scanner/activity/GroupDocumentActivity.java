@@ -46,6 +46,7 @@ import com.scanny.scanner.adapter.GroupDocAdapter;
 import com.scanny.scanner.db.DBHelper;
 import com.scanny.scanner.main_utils.PdfProtector;
 import com.scanny.scanner.main_utils.Constant;
+import com.scanny.scanner.main_utils.DocumentStraightener;
 import com.scanny.scanner.models.DBModel;
 import com.scanny.scanner.utils.NavigationUtils;
 
@@ -308,7 +309,16 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                             }
                             Constant.original = bitmap;
                             Constant.IdentifyActivity = "CropDocumentActivity4";
-                            NavigationUtils.jumpNextActivity(GroupDocumentActivity.this);
+                            DocumentStraightener.straightenAsync(GroupDocumentActivity.this, bitmap, new DocumentStraightener.Callback() {
+                                @Override
+                                public void onDone(Bitmap straightened) {
+                                    if (isFinishing() || isDestroyed()) {
+                                        return;
+                                    }
+                                    Constant.original = straightened;
+                                    NavigationUtils.jumpNextActivity(GroupDocumentActivity.this);
+                                }
+                            });
                         }
                     });
                 } else {
@@ -319,7 +329,16 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                             }
                             Constant.original = bitmap;
                             Constant.IdentifyActivity = "CropDocumentActivity4";
-                            NavigationUtils.jumpNextActivity(GroupDocumentActivity.this);
+                            DocumentStraightener.straightenAsync(GroupDocumentActivity.this, bitmap, new DocumentStraightener.Callback() {
+                                @Override
+                                public void onDone(Bitmap straightened) {
+                                    if (isFinishing() || isDestroyed()) {
+                                        return;
+                                    }
+                                    Constant.original = straightened;
+                                    NavigationUtils.jumpNextActivity(GroupDocumentActivity.this);
+                                }
+                            });
                         }
                     });
                 }

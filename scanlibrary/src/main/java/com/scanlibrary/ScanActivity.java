@@ -53,6 +53,11 @@ public class ScanActivity extends Activity implements IScanner, ComponentCallbac
         return filter(bitmap, rgba -> ScanImageOps.warp(rgba, x1, y1, x2, y2, x3, y3, x4, y4));
     }
 
+    /** Text-line deskew (see {@link ScanImageOps#deskew}); null for non-ARGB_8888 input. */
+    public static Bitmap getDeskewedBitmap(Bitmap bitmap) {
+        return filter(bitmap, ScanImageOps::deskew);
+    }
+
     public static Bitmap getGrayBitmap(Bitmap bitmap) {
         return filter(bitmap, ScanImageOps::gray);
     }

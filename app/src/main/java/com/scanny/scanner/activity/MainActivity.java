@@ -67,6 +67,7 @@ import com.scanny.scanner.adapter.DrawerItemAdapter;
 import com.scanny.scanner.db.DBHelper;
 import com.scanny.scanner.main_utils.PdfProtector;
 import com.scanny.scanner.main_utils.Constant;
+import com.scanny.scanner.main_utils.DocumentStraightener;
 import com.scanny.scanner.models.DBModel;
 import com.scanny.scanner.models.DrawerModel;
 import com.scanny.scanner.utils.NavigationUtils;
@@ -262,6 +263,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
         drawerList.add(new DrawerModel("Privacy Policy", R.drawable.ic_privacy_policy));
         drawerList.add(new DrawerModel("Share App", R.drawable.ic_share_app));
         drawerList.add(new DrawerModel("Rate Us", R.drawable.ic_rate_us));
+        drawerList.add(new DrawerModel(getString(R.string.autoStraighten), R.drawable.ic_left_rotate));
 //        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
 //        drawerList.add(new DrawerModel(getResources().getString(R.string.darkTheme), R.drawable.theme_light_dark));
 //        }
@@ -551,7 +553,16 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                             Constant.current_camera_view = "Document";
                             Constant.original = bitmap;
                             Constant.IdentifyActivity = "CropDocumentActivity";
-                            NavigationUtils.jumpNextActivity(MainActivity.this);
+                            DocumentStraightener.straightenAsync(MainActivity.this, bitmap, new DocumentStraightener.Callback() {
+                                @Override
+                                public void onDone(Bitmap straightened) {
+                                    if (isFinishing() || isDestroyed()) {
+                                        return;
+                                    }
+                                    Constant.original = straightened;
+                                    NavigationUtils.jumpNextActivity(MainActivity.this);
+                                }
+                            });
                         }
                     });
                 } else {
@@ -563,7 +574,16 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
                             Constant.current_camera_view = "Document";
                             Constant.original = bitmap;
                             Constant.IdentifyActivity = "CropDocumentActivity";
-                            NavigationUtils.jumpNextActivity(MainActivity.this);
+                            DocumentStraightener.straightenAsync(MainActivity.this, bitmap, new DocumentStraightener.Callback() {
+                                @Override
+                                public void onDone(Bitmap straightened) {
+                                    if (isFinishing() || isDestroyed()) {
+                                        return;
+                                    }
+                                    Constant.original = straightened;
+                                    NavigationUtils.jumpNextActivity(MainActivity.this);
+                                }
+                            });
                         }
                     });
                 }
@@ -1052,6 +1072,10 @@ public class MainActivity extends BaseActivity implements View.OnClickListener, 
             } catch (ActivityNotFoundException e) {
                 e.printStackTrace();
             }
+        } else if (i == 6) {
+            // The row's switch reflects the pref; tapping the row flips it as well.
+            DocumentStraightener.setEnabled(this, !DocumentStraightener.isEnabled(this));
+            drawerItemAdapter.notifyDataSetChanged();
         }
     }
 

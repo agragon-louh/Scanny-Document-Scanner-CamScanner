@@ -46,6 +46,12 @@ public class Constant {
 
     public static String PREFS_NAME = "theme_prefs";
     public static String KEY_THEME = "prefs.theme";
+    /** Boolean pref: warp + deskew captured/imported pages before the crop screen (default on). */
+    public static String KEY_AUTO_STRAIGHTEN = "prefs.auto_straighten";
+    /** Pre-straighten bitmap, kept so the crop screen can offer the untouched page again. */
+    public static Bitmap rawOriginal;
+    /** The straightened bitmap produced from {@link #rawOriginal}; identity-checked before restoring. */
+    public static Bitmap straightened;
     public static int THEME_UNDEFINED = -1;
     public static int THEME_LIGHT = 0;
     public static int THEME_DARK = 1;

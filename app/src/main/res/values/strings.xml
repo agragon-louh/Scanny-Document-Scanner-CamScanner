@@ -166,5 +166,6 @@
     <string name="license_key"></string>
     <string name="purchase_text">Your purchase was successful!</string>
     <string name="darkTheme">Dark Theme</string>
+    <string name="autoStraighten">Auto-straighten</string>
 
 </resources>

@@ -17,6 +17,7 @@ import androidx.appcompat.widget.SwitchCompat;
 import com.scanny.scanner.R;
 import com.scanny.scanner.activity.MainActivity;
 import com.scanny.scanner.main_utils.Constant;
+import com.scanny.scanner.main_utils.DocumentStraightener;
 import com.scanny.scanner.models.DrawerModel;
 
 import java.util.ArrayList;
@@ -54,9 +55,15 @@ public class DrawerItemAdapter extends BaseAdapter {
         viewHolder.tv_item_name = (TextView) inflate.findViewById(R.id.tv_item_name);
         viewHolder.switchNightMode = (SwitchCompat) inflate.findViewById(R.id.switchNightMode);
 
-        if (arrayList.get(i).getItem_name().equalsIgnoreCase(activity.getResources().getString(R.string.darkTheme))) {
+        String itemName = arrayList.get(i).getItem_name();
+        boolean isThemeRow = itemName.equalsIgnoreCase(activity.getResources().getString(R.string.darkTheme));
+        boolean isStraightenRow = itemName.equalsIgnoreCase(activity.getResources().getString(R.string.autoStraighten));
+        if (isThemeRow) {
             viewHolder.switchNightMode.setVisibility(View.VISIBLE);
             initTheme(viewHolder.switchNightMode);
+        } else if (isStraightenRow) {
+            viewHolder.switchNightMode.setVisibility(View.VISIBLE);
+            viewHolder.switchNightMode.setChecked(DocumentStraightener.isEnabled(activity));
         } else {
             viewHolder.switchNightMode.setVisibility(View.GONE);
         }
@@ -69,7 +76,15 @@ public class DrawerItemAdapter extends BaseAdapter {
             }
         });
 
-        viewHolder.switchNightMode.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+        if (isStraightenRow) {
+            // Tapping the switch itself must not also trigger the row click (which flips the pref).
+            viewHolder.switchNightMode.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    DocumentStraightener.setEnabled(activity, ((SwitchCompat) v).isChecked());
+                }
+            });
+        } else if (isThemeRow) viewHolder.switchNightMode.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 SharedPreferences sharedPreferences = activity.getSharedPreferences(Constant.PREFS_NAME, Context.MODE_PRIVATE);

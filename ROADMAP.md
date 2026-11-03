@@ -24,17 +24,22 @@ libraries are needed until phase 4.
 
 Goal: a captured page comes out flat, upright and cropped without the user touching the crop screen.
 
-- [ ] `ScanImageOps.deskew(Mat)`: threshold to an ink mask, estimate the dominant text angle
-      (`minAreaRect` on the mask, Hough lines as a cross-check), clamp to ±15°, rotate with
-      `warpAffine`, trim the border. Unit test with a synthetic rotated text image.
-- [ ] Fix the output-size formula in `ScanImageOps.warp` (use real edge lengths, keep the aspect
+- [x] `ScanImageOps.deskew(Mat)`: ink mask (inverted Otsu), projection-profile angle search
+      (coarse 1° then 0.25° refine, clamped to ±15°), `warpAffine` with edge replication instead of
+      trimming. Skips blank/photo-like pages and skews under 0.3°. Unit tests with synthetic rotated
+      text pages.
+- [x] Fix the output-size formula in `ScanImageOps.warp` (use real edge lengths, keep the aspect
       ratio of the longer edges).
-- [ ] `DocumentStraightener` in the app: SmartCropper detection, fallback to
+- [x] `DocumentStraightener` in the app: SmartCropper detection, fallback to
       `ScanImageOps.findCorners` when SmartCropper returns the full frame, warp, deskew. Runs on a
       background thread (not `AsyncTask`).
-- [ ] Call it from `ScannerActivity.onPictureTaken` and from gallery import. The crop screen opens
+- [x] Call it from `ScannerActivity.onPictureTaken` and from gallery import. The crop screen opens
       with the result applied; "full crop" restores the original.
-- [ ] Settings toggle: Auto-straighten on/off.
+- [x] Settings toggle: Auto-straighten on/off (drawer row, default on).
+
+Status: implemented; library unit tests pass on desktop OpenCV. The app module has not been built
+or run on a device yet (no Android SDK where this was written), so the on-device "done when" check
+below is still open.
 
 Done when: 20 test photos (tilted, rotated, on dark and light desks) all come out within 1° of
 upright and the user never needs the crop screen for a plain A4 page.

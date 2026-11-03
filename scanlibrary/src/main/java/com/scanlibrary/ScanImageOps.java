@@ -3,6 +3,7 @@ package com.scanlibrary;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfDouble;
 import org.opencv.core.MatOfInt;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
@@ -58,34 +59,128 @@ public final class ScanImageOps {
 
     /**
      * Perspective-corrects the quadrilateral with corners (x1,y1) top-left, (x2,y2) top-right,
-     * (x3,y3) bottom-left, (x4,y4) bottom-right. Corner coordinates are truncated to whole
-     * pixels, as the native code did.
+     * (x3,y3) bottom-left, (x4,y4) bottom-right. Sub-pixel corners are used as given.
      */
     public static Mat warp(Mat rgba, float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) {
-        // The original sized the output with these (doubled-term) formulas; kept as is.
-        float w1 = (float) Math.sqrt(Math.pow(x4 - x3, 2) + Math.pow(x4 - x3, 2));
-        float w2 = (float) Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(x2 - x1, 2));
-        float h1 = (float) Math.sqrt(Math.pow(y2 - y4, 2) + Math.pow(y2 - y4, 2));
-        float h2 = (float) Math.sqrt(Math.pow(y1 - y3, 2) + Math.pow(y1 - y3, 2));
-        float maxWidth = Math.min(w1, w2);
-        float maxHeight = Math.min(h1, h2);
+        // Output size from the real edge lengths (the native code used a doubled-term formula that
+        // inflated the output by sqrt(2)). The longer of each pair of opposite edges is kept so no
+        // resolution is lost; +1 makes the corner pixels (w-1, h-1) map exactly onto the corners.
+        double topW = Math.hypot(x2 - x1, y2 - y1);
+        double bottomW = Math.hypot(x4 - x3, y4 - y3);
+        double leftH = Math.hypot(x3 - x1, y3 - y1);
+        double rightH = Math.hypot(x4 - x2, y4 - y2);
+        int outWidth = Math.max(1, (int) Math.round(Math.max(topW, bottomW)) + 1);
+        int outHeight = Math.max(1, (int) Math.round(Math.max(leftH, rightH)) + 1);
 
         MatOfPoint2f dstPts = new MatOfPoint2f(
                 new Point(0, 0),
-                new Point((int) (maxWidth - 1), 0),
-                new Point(0, (int) (maxHeight - 1)),
-                new Point((int) (maxWidth - 1), (int) (maxHeight - 1)));
+                new Point(outWidth - 1, 0),
+                new Point(0, outHeight - 1),
+                new Point(outWidth - 1, outHeight - 1));
         MatOfPoint2f imgPts = new MatOfPoint2f(
-                new Point((int) x1, (int) y1),
-                new Point((int) x2, (int) y2),
-                new Point((int) x3, (int) y3),
-                new Point((int) x4, (int) y4));
+                new Point(x1, y1),
+                new Point(x2, y2),
+                new Point(x3, y3),
+                new Point(x4, y4));
         Mat transform = Imgproc.getPerspectiveTransform(imgPts, dstPts);
         Mat dst = new Mat();
-        Imgproc.warpPerspective(rgba, dst, transform, new Size((int) maxWidth, (int) maxHeight));
+        Imgproc.warpPerspective(rgba, dst, transform, new Size(outWidth, outHeight));
         transform.release();
         dstPts.release();
         imgPts.release();
+        return dst;
+    }
+
+    /** Largest skew corrected by {@link #deskew}, in degrees either way. */
+    public static final double MAX_DESKEW_DEGREES = 15;
+    /** Skews smaller than this are left alone (rotating would only blur the text). */
+    private static final double MIN_DESKEW_DEGREES = 0.3;
+
+    /**
+     * Estimates how far the text lines of a page are tilted, as the rotation in degrees (positive =
+     * counter-clockwise, OpenCV convention) that makes them horizontal. Uses the projection-profile
+     * method: the correct angle is the one where ink piles up into the sharpest row peaks.
+     * Returns 0 for blank or featureless pages. Result is within +/-{@link #MAX_DESKEW_DEGREES}.
+     */
+    public static double estimateSkew(Mat rgba) {
+        Mat gray = gray(rgba);
+        // Work on a small copy: skew is a global property and this keeps the search cheap.
+        double scale = 600.0 / Math.max(gray.cols(), gray.rows());
+        if (scale < 1) {
+            Imgproc.resize(gray, gray, new Size(), scale, scale, Imgproc.INTER_AREA);
+        }
+        Imgproc.GaussianBlur(gray, gray, new Size(3, 3), 0);
+        Mat ink = new Mat();
+        // Inverted Otsu: dark ink (and anything dark) becomes 255.
+        Imgproc.threshold(gray, ink, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
+        gray.release();
+        // A page with almost no ink (or almost all ink, e.g. a photo) has no usable lines.
+        double fill = Core.countNonZero(ink) / (double) ink.total();
+        if (fill < 0.005 || fill > 0.6) {
+            ink.release();
+            return 0;
+        }
+        double best = 0;
+        double bestScore = profileScore(ink, 0);
+        double zeroScore = bestScore;
+        for (double a = -MAX_DESKEW_DEGREES; a <= MAX_DESKEW_DEGREES; a += 1) {
+            double sc = profileScore(ink, a);
+            if (sc > bestScore) {
+                bestScore = sc;
+                best = a;
+            }
+        }
+        double centre = best;
+        for (double a = centre - 1; a <= centre + 1; a += 0.25) {
+            if (Math.abs(a) > MAX_DESKEW_DEGREES) {
+                continue;
+            }
+            double sc = profileScore(ink, a);
+            if (sc > bestScore) {
+                bestScore = sc;
+                best = a;
+            }
+        }
+        ink.release();
+        // Only trust a clear win over "no rotation".
+        return bestScore > zeroScore * 1.02 ? best : 0;
+    }
+
+    /** Variance of the row sums after rotating by {@code angle}: high when lines are horizontal. */
+    private static double profileScore(Mat ink, double angle) {
+        Point centre = new Point(ink.cols() / 2.0, ink.rows() / 2.0);
+        Mat m = Imgproc.getRotationMatrix2D(centre, angle, 1.0);
+        Mat rotated = new Mat();
+        Imgproc.warpAffine(ink, rotated, m, ink.size(), Imgproc.INTER_NEAREST);
+        Mat rows = new Mat();
+        Core.reduce(rotated, rows, 1, Core.REDUCE_SUM, CvType.CV_32S);
+        MatOfDouble mean = new MatOfDouble();
+        MatOfDouble std = new MatOfDouble();
+        Core.meanStdDev(rows, mean, std);
+        double sd = std.get(0, 0)[0];
+        m.release();
+        rotated.release();
+        rows.release();
+        mean.release();
+        std.release();
+        return sd * sd;
+    }
+
+    /**
+     * Rotates the page so its text lines are horizontal. Corrects up to
+     * {@link #MAX_DESKEW_DEGREES}; tiny or undetectable skews return an unchanged copy. The size is
+     * kept and newly exposed corners are filled by edge replication (no black wedges).
+     */
+    public static Mat deskew(Mat rgba) {
+        double angle = estimateSkew(rgba);
+        if (Math.abs(angle) < MIN_DESKEW_DEGREES) {
+            return rgba.clone();
+        }
+        Point centre = new Point(rgba.cols() / 2.0, rgba.rows() / 2.0);
+        Mat m = Imgproc.getRotationMatrix2D(centre, angle, 1.0);
+        Mat dst = new Mat();
+        Imgproc.warpAffine(rgba, dst, m, rgba.size(), Imgproc.INTER_CUBIC, Core.BORDER_REPLICATE);
+        m.release();
         return dst;
     }
 

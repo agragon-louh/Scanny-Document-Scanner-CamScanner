@@ -83,13 +83,66 @@ public class ScanImageOpsTest {
     }
 
     @Test
-    public void warpKeepsNativeOutputSize() {
+    public void warpSizesOutputFromEdgeLengths() {
         Mat img = new Mat(300, 400, CvType.CV_8UC4, new Scalar(10, 20, 30, 255));
         Mat out = ScanImageOps.warp(img, 0, 0, 399, 0, 0, 299, 399, 299);
-        // sqrt(2 * 399^2) x sqrt(2 * 299^2), truncated: the original's sizing formula.
-        assertEquals(564, out.cols());
-        assertEquals(422, out.rows());
+        // Real edge lengths (399 x 299), +1 so the corner pixels land on the corners.
+        assertEquals(400, out.cols());
+        assertEquals(300, out.rows());
         assertEquals(CvType.CV_8UC4, out.type());
         assertArrayEquals(new double[]{10, 20, 30, 255}, out.get(200, 280), 0);
+    }
+
+    /** White page with dark text-like bars, rotated by {@code degrees} (counter-clockwise). */
+    private static Mat textPage(double degrees) {
+        Mat img = new Mat(600, 800, CvType.CV_8UC4, new Scalar(255, 255, 255, 255));
+        for (int line = 0; line < 12; line++) {
+            int y = 80 + line * 36;
+            for (int x = 90; x < 700; x += 22) {
+                Imgproc.rectangle(img, new Rect(x, y, 16, 12), new Scalar(20, 20, 20, 255), -1);
+            }
+        }
+        if (degrees == 0) {
+            return img;
+        }
+        Mat m = Imgproc.getRotationMatrix2D(new Point(400, 300), degrees, 1.0);
+        Mat out = new Mat();
+        Imgproc.warpAffine(img, out, m, img.size(), Imgproc.INTER_LINEAR,
+                org.opencv.core.Core.BORDER_CONSTANT, new Scalar(255, 255, 255, 255));
+        return out;
+    }
+
+    @Test
+    public void estimateSkewRecoversRotation() {
+        // Page tilted +6 deg: estimate is the rotation that undoes it.
+        assertEquals(-6, ScanImageOps.estimateSkew(textPage(6)), 1.0);
+        assertEquals(4, ScanImageOps.estimateSkew(textPage(-4)), 1.0);
+    }
+
+    @Test
+    public void estimateSkewIsZeroForStraightAndBlankPages() {
+        assertEquals(0, ScanImageOps.estimateSkew(textPage(0)), 0.3);
+        Mat blank = new Mat(300, 400, CvType.CV_8UC4, new Scalar(255, 255, 255, 255));
+        assertEquals(0, ScanImageOps.estimateSkew(blank), 0);
+    }
+
+    @Test
+    public void deskewStraightensTiltedPage() {
+        Mat tilted = textPage(7);
+        Mat fixed = ScanImageOps.deskew(tilted);
+        assertEquals(tilted.size(), fixed.size());
+        assertEquals(CvType.CV_8UC4, fixed.type());
+        // Residual skew after correction is close to zero.
+        assertEquals(0, ScanImageOps.estimateSkew(fixed), 1.0);
+    }
+
+    @Test
+    public void deskewLeavesStraightPageUnchanged() {
+        Mat straight = textPage(0);
+        Mat out = ScanImageOps.deskew(straight);
+        Mat diff = new Mat();
+        org.opencv.core.Core.absdiff(straight, out, diff);
+        assertEquals(0, org.opencv.core.Core.countNonZero(
+                ScanImageOps.gray(diff)), 0);
     }
 }
