@@ -8,23 +8,81 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 
+import org.opencv.android.Utils;
+import org.opencv.core.Mat;
+
 
 public class ScanActivity extends Activity implements IScanner, ComponentCallbacks2 {
 
     static {
-        System.loadLibrary("opencv_java3");
-        System.loadLibrary("Scanner");
+        // OpenCV 4 from Maven Central (org.opencv:opencv). The filters used to live in a
+        // prebuilt libScanner.so linked against a 2017 OpenCV 3; they are now plain Java on top
+        // of the OpenCV Java API (ScanImageOps).
+        System.loadLibrary("opencv_java4");
     }
 
-    public static native Bitmap getScannedBitmap(Bitmap bitmap, float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4);
+    private interface MatOp {
+        Mat apply(Mat rgba);
+    }
 
-    public static native Bitmap getGrayBitmap(Bitmap bitmap);
+    /**
+     * Runs {@code op} on the pixels of {@code bitmap} and returns the result as a new bitmap of
+     * the same config. Like the native code, only ARGB_8888 input is accepted (null otherwise).
+     */
+    private static Bitmap filter(Bitmap bitmap, MatOp op) {
+        if (bitmap == null || bitmap.getConfig() != Bitmap.Config.ARGB_8888) {
+            return null;
+        }
+        Mat src = new Mat();
+        Mat dst = null;
+        try {
+            Utils.bitmapToMat(bitmap, src);
+            dst = op.apply(src);
+            Bitmap result = Bitmap.createBitmap(dst.cols(), dst.rows(), Bitmap.Config.ARGB_8888);
+            Utils.matToBitmap(dst, result);
+            return result;
+        } finally {
+            src.release();
+            if (dst != null) {
+                dst.release();
+            }
+        }
+    }
 
-    public static native Bitmap getMagicColorBitmap(Bitmap bitmap);
+    public static Bitmap getScannedBitmap(Bitmap bitmap, float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) {
+        return filter(bitmap, rgba -> ScanImageOps.warp(rgba, x1, y1, x2, y2, x3, y3, x4, y4));
+    }
 
-    public static native Bitmap getBWBitmap(Bitmap bitmap);
+    /** Text-line deskew (see {@link ScanImageOps#deskew}); null for non-ARGB_8888 input. */
+    public static Bitmap getDeskewedBitmap(Bitmap bitmap) {
+        return filter(bitmap, ScanImageOps::deskew);
+    }
 
-    public static native float[] getPoints(Bitmap bitmap);
+    public static Bitmap getGrayBitmap(Bitmap bitmap) {
+        return filter(bitmap, ScanImageOps::gray);
+    }
+
+    public static Bitmap getMagicColorBitmap(Bitmap bitmap) {
+        return filter(bitmap, ScanImageOps::magicColor);
+    }
+
+    public static Bitmap getBWBitmap(Bitmap bitmap) {
+        return filter(bitmap, ScanImageOps::blackAndWhite);
+    }
+
+    /** Document corners as {@code [x1, x2, x3, x4, y1, y2, y3, y4]}, or null for non-ARGB_8888 input. */
+    public static float[] getPoints(Bitmap bitmap) {
+        if (bitmap == null || bitmap.getConfig() != Bitmap.Config.ARGB_8888) {
+            return null;
+        }
+        Mat src = new Mat();
+        try {
+            Utils.bitmapToMat(bitmap, src);
+            return ScanImageOps.findCorners(src);
+        } finally {
+            src.release();
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

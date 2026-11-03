@@ -329,6 +329,14 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
                 }
                 return;
             case R.id.iv_full_crop:
+                if (Constant.rawOriginal != null && Constant.original == Constant.straightened) {
+                    // Auto-straighten was applied: the full-crop button hands back the untouched page.
+                    Constant.original = Constant.rawOriginal;
+                    original = Constant.rawOriginal;
+                    Constant.rawOriginal = null;
+                    Constant.straightened = null;
+                    iv_preview_crop.setImageToCrop(Constant.original);
+                }
                 iv_preview_crop.setFullImgCrop();
                 return;
             case R.id.iv_retake:

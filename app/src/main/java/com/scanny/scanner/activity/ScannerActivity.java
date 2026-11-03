@@ -54,6 +54,7 @@ import com.scanny.scanner.db.DBHelper;
 import com.scanny.scanner.main_utils.AppStorage;
 import com.scanny.scanner.main_utils.BitmapUtils;
 import com.scanny.scanner.main_utils.Constant;
+import com.scanny.scanner.main_utils.DocumentStraightener;
 import com.scanny.scanner.models.BookModel;
 import com.scanny.scanner.models.DBModel;
 import com.scanny.scanner.utils.NavigationUtils;
@@ -365,9 +366,28 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                             Matrix matrix = new Matrix();
                             matrix.postRotate((float) cameraPhotoOrientation);
                             Constant.original = Bitmap.createBitmap(scalePreserveRatio, 0, 0, scalePreserveRatio.getWidth(), scalePreserveRatio.getHeight(), matrix, true);
-                            progressBar.setVisibility(View.GONE);
-                            startActivity(new Intent(ScannerActivity.this, CropDocumentActivity.class));
-                            finish();
+                            if (!Constant.current_camera_view.equals("Document")) {
+                                // ID cards keep the raw frame; only document pages are straightened.
+                                Constant.rawOriginal = null;
+                                Constant.straightened = null;
+                                progressBar.setVisibility(View.GONE);
+                                startActivity(new Intent(ScannerActivity.this, CropDocumentActivity.class));
+                                finish();
+                                return;
+                            }
+                            progressBar.setVisibility(View.VISIBLE);
+                            DocumentStraightener.straightenAsync(ScannerActivity.this, Constant.original, new DocumentStraightener.Callback() {
+                                @Override
+                                public void onDone(Bitmap straightened) {
+                                    if (isFinishing() || isDestroyed()) {
+                                        return;
+                                    }
+                                    Constant.original = straightened;
+                                    progressBar.setVisibility(View.GONE);
+                                    startActivity(new Intent(ScannerActivity.this, CropDocumentActivity.class));
+                                    finish();
+                                }
+                            });
                         } catch (IOException e) {
                             Log.w(TAG, "Cannot write to " + file, e);
                         }
@@ -1003,7 +1023,16 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                             }
                             Constant.original = bitmap;
                             Constant.IdentifyActivity = "CropDocumentActivity2";
-                            NavigationUtils.jumpNextActivity(ScannerActivity.this);
+                            DocumentStraightener.straightenAsync(ScannerActivity.this, bitmap, new DocumentStraightener.Callback() {
+                                @Override
+                                public void onDone(Bitmap straightened) {
+                                    if (isFinishing() || isDestroyed()) {
+                                        return;
+                                    }
+                                    Constant.original = straightened;
+                                    NavigationUtils.jumpNextActivity(ScannerActivity.this);
+                                }
+                            });
                         }
                     });
                 } else {
@@ -1015,7 +1044,16 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                             }
                             Constant.original = bitmap;
                             Constant.IdentifyActivity = "CropDocumentActivity2";
-                            NavigationUtils.jumpNextActivity(ScannerActivity.this);
+                            DocumentStraightener.straightenAsync(ScannerActivity.this, bitmap, new DocumentStraightener.Callback() {
+                                @Override
+                                public void onDone(Bitmap straightened) {
+                                    if (isFinishing() || isDestroyed()) {
+                                        return;
+                                    }
+                                    Constant.original = straightened;
+                                    NavigationUtils.jumpNextActivity(ScannerActivity.this);
+                                }
+                            });
                         }
                     });
                 }

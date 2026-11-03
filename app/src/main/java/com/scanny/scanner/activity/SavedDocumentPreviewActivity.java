@@ -39,6 +39,7 @@ import com.scanny.scanner.adapter.PreviewPagerAdapter;
 import com.scanny.scanner.adapter.SavedToolsAdapter;
 import com.scanny.scanner.db.DBHelper;
 import com.scanny.scanner.document_view.ViewPagerFixed;
+import com.scanny.scanner.main_utils.PdfProtector;
 import com.scanny.scanner.main_utils.AppStorage;
 import com.scanny.scanner.main_utils.BitmapUtils;
 import com.scanny.scanner.main_utils.Constant;
@@ -473,6 +474,8 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
             public void onClick(View view) {
                 if (et_enter_pswrd.getText().toString().equals("") || et_confirm_pswrd.getText().toString().equals("")) {
                     Toast.makeText(getApplicationContext(), "Please Enter Password", Toast.LENGTH_SHORT).show();
+                } else if (!PdfProtector.isStrongEnough(et_enter_pswrd.getText().toString())) {
+                    Toast.makeText(getApplicationContext(), "Password must be at least " + PdfProtector.MIN_PASSWORD_LENGTH + " characters", Toast.LENGTH_LONG).show();
                 } else if (!et_enter_pswrd.getText().toString().equals(et_confirm_pswrd.getText().toString())) {
                     Toast.makeText(getApplicationContext(), "Your password & Confirm password do not match.", Toast.LENGTH_LONG).show();
                 } else {

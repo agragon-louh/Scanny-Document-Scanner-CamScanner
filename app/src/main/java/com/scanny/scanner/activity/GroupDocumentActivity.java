@@ -16,7 +16,6 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.text.method.HideReturnsTransformationMethod;
 import android.text.method.PasswordTransformationMethod;
 import android.view.MenuItem;
@@ -45,7 +44,9 @@ import com.scanny.scanner.picker.ImagePicker;
 import com.scanny.scanner.R;
 import com.scanny.scanner.adapter.GroupDocAdapter;
 import com.scanny.scanner.db.DBHelper;
+import com.scanny.scanner.main_utils.PdfProtector;
 import com.scanny.scanner.main_utils.Constant;
+import com.scanny.scanner.main_utils.DocumentStraightener;
 import com.scanny.scanner.models.DBModel;
 import com.scanny.scanner.utils.NavigationUtils;
 
@@ -308,7 +309,16 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                             }
                             Constant.original = bitmap;
                             Constant.IdentifyActivity = "CropDocumentActivity4";
-                            NavigationUtils.jumpNextActivity(GroupDocumentActivity.this);
+                            DocumentStraightener.straightenAsync(GroupDocumentActivity.this, bitmap, new DocumentStraightener.Callback() {
+                                @Override
+                                public void onDone(Bitmap straightened) {
+                                    if (isFinishing() || isDestroyed()) {
+                                        return;
+                                    }
+                                    Constant.original = straightened;
+                                    NavigationUtils.jumpNextActivity(GroupDocumentActivity.this);
+                                }
+                            });
                         }
                     });
                 } else {
@@ -319,7 +329,16 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                             }
                             Constant.original = bitmap;
                             Constant.IdentifyActivity = "CropDocumentActivity4";
-                            NavigationUtils.jumpNextActivity(GroupDocumentActivity.this);
+                            DocumentStraightener.straightenAsync(GroupDocumentActivity.this, bitmap, new DocumentStraightener.Callback() {
+                                @Override
+                                public void onDone(Bitmap straightened) {
+                                    if (isFinishing() || isDestroyed()) {
+                                        return;
+                                    }
+                                    Constant.original = straightened;
+                                    NavigationUtils.jumpNextActivity(GroupDocumentActivity.this);
+                                }
+                            });
                         }
                     });
                 }
@@ -458,6 +477,8 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
             public void onClick(View view) {
                 if (et_enter_pass.getText().toString().equals("") || et_confirm_pass.getText().toString().equals("")) {
                     Toast.makeText(getApplicationContext(), "Please Enter Password", Toast.LENGTH_SHORT).show();
+                } else if (!PdfProtector.isStrongEnough(et_enter_pass.getText().toString())) {
+                    Toast.makeText(getApplicationContext(), "Password must be at least " + PdfProtector.MIN_PASSWORD_LENGTH + " characters", Toast.LENGTH_LONG).show();
                 } else if (!et_enter_pass.getText().toString().equals(et_confirm_pass.getText().toString())) {
                     Toast.makeText(getApplicationContext(), "Your password & Confirm password do not match.", Toast.LENGTH_LONG).show();
                 } else if (saveOrShare.equals("share")) {
@@ -962,17 +983,10 @@ public class GroupDocumentActivity extends BaseActivity implements View.OnClickL
                     BitmapFactory.Options options = new BitmapFactory.Options();
                     options.inPreferredConfig = Bitmap.Config.ARGB_8888;
                     Bitmap decodeStream = BitmapFactory.decodeStream(new FileInputStream(it.next()), (Rect) null, options);
-                    File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/" + getResources().getString(R.string.app_name) + "/Images");
-                    if (!file.exists()) {
-                        file.mkdirs();
-                    }
-                    File file2 = new File(file, System.currentTimeMillis() + ".jpg");
-                    if (file2.exists()) {
-                        file2.delete();
-                    }
                     if (decodeStream != null) {
-                        decodeStream.compress(Bitmap.CompressFormat.JPEG, 100, new FileOutputStream(file2));
-                        saveImageToGallery(file2.getPath(), GroupDocumentActivity.this);
+                        // Download/Scanny/Images; through MediaStore on Android 10 (ExportStorage).
+                        exportImage(decodeStream);
+                        decodeStream.recycle();
                     }
                 }
             } catch (IOException e) {

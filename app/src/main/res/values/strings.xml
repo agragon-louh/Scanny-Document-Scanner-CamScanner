@@ -87,6 +87,9 @@
     <string name="number">Number</string>
     <string name="checkMark">Check Mark</string>
     <string name="privacy_policy">Privacy Policy</string>
+    <!-- Contact address shown in the bundled privacy policy (res/raw/privacy_policy.html).
+         Empty: the policy points to the developer contact on the Google Play listing. -->
+    <string name="privacy_contact_email" translatable="false"></string>
     <string name="noDocumentScan">No Document Scanned Yet.</string>
     <string name="cropDocument">Crop Document</string>
     <string name="rotateDoc">Rotate Doc</string>
@@ -163,5 +166,6 @@
     <string name="license_key"></string>
     <string name="purchase_text">Your purchase was successful!</string>
     <string name="darkTheme">Dark Theme</string>
+    <string name="autoStraighten">Auto-straighten</string>
 
 </resources>

@@ -47,9 +47,15 @@
     @android.webkit.JavascriptInterface <methods>;
 }
 
-# OpenCV JNI bridge in :scanlibrary (native code looks these up by name).
--keep class com.scanlibrary.** { *; }
+# OpenCV 4 Java API (org.opencv:opencv): its JNI library binds to these classes by name.
 -keep class org.opencv.** { *; }
+-keep class com.scanlibrary.** { *; }
 
 # jsoup references the optional re2j regex engine, which is not bundled.
 -dontwarn com.google.re2j.**
+
+# PDFBox-Android (PDF password protection, see PdfProtector).
+# JPEG 2000 decoding is an optional extra library that the app does not ship.
+-dontwarn com.gemalto.jp2.**
+# SecurityHandlerFactory creates the AES security handlers reflectively.
+-keep class com.tom_roush.pdfbox.pdmodel.encryption.** { *; }
