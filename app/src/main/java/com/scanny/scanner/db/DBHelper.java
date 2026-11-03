@@ -10,6 +10,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.scanny.scanner.main_utils.AppStorage;
 import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.DBModel;
 
@@ -95,12 +96,15 @@ public class DBHelper extends SQLiteOpenHelper {
         return true;
     }
 
-    /** Page images live under the app's external files dir; only files in there are deleted. */
-    private final File imageRoot;
+    /**
+     * Page images live in internal storage; only files in there are deleted. The old external
+     * files dir is included for pages that have not been migrated yet (see AppStorage).
+     */
+    private final File[] imageRoots;
 
     public DBHelper(Context context) {
         super(context, DATABASE_NAME, (SQLiteDatabase.CursorFactory) null, DATABASE_VERSION);
-        imageRoot = context.getExternalFilesDir(null);
+        imageRoots = new File[]{AppStorage.root(context), context.getExternalFilesDir(null)};
     }
 
     @Override
@@ -447,14 +451,16 @@ public class DBHelper extends SQLiteOpenHelper {
      */
     private ArrayList<File> unreferencedImages(SQLiteDatabase db, ArrayList<String> paths) {
         ArrayList<File> files = new ArrayList<>();
-        if (imageRoot == null) {
-            return files;
-        }
         try {
-            String root = imageRoot.getCanonicalPath() + File.separator;
+            ArrayList<String> roots = new ArrayList<>();
+            for (File imageRoot : imageRoots) {
+                if (imageRoot != null) {
+                    roots.add(imageRoot.getCanonicalPath() + File.separator);
+                }
+            }
             for (String path : paths) {
                 File file = new File(path);
-                if (file.getCanonicalPath().startsWith(root) && !files.contains(file) && !isImageReferenced(db, path)) {
+                if (isInside(file.getCanonicalPath(), roots) && !files.contains(file) && !isImageReferenced(db, path)) {
                     files.add(file);
                 }
             }
@@ -463,6 +469,46 @@ public class DBHelper extends SQLiteOpenHelper {
             files.clear();
         }
         return files;
+    }
+
+    private static boolean isInside(String path, ArrayList<String> roots) {
+        for (String root : roots) {
+            if (path.startsWith(root)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Rewrites every stored image path that starts with {@code oldPrefix} to start with
+     * {@code newPrefix} instead, in one transaction. Used when page images are moved to internal
+     * storage.
+     */
+    public void relocateImagePaths(String oldPrefix, String newPrefix) {
+        SQLiteDatabase db = getWritableDatabase();
+        String[] args = {newPrefix, String.valueOf(oldPrefix.length() + 1), String.valueOf(oldPrefix.length()), oldPrefix};
+        db.beginTransaction();
+        try {
+            db.execSQL("UPDATE " + TABLE_NAME + " SET " + KEY_FIRST_IMAGE + " = ? || substr(" + KEY_FIRST_IMAGE + ", ?) WHERE substr(" + KEY_FIRST_IMAGE + ", 1, ?) = ?", args);
+            ArrayList<String> tables = new ArrayList<>();
+            Cursor cursor = db.rawQuery("SELECT name FROM sqlite_master WHERE type = 'table'", null);
+            try {
+                while (cursor.moveToNext()) {
+                    if (!isReservedTable(cursor.getString(0))) {
+                        tables.add(cursor.getString(0));
+                    }
+                }
+            } finally {
+                cursor.close();
+            }
+            for (String table : tables) {
+                db.execSQL("UPDATE " + quote(table) + " SET " + KEY_IMG_PATH + " = ? || substr(" + KEY_IMG_PATH + ", ?) WHERE substr(" + KEY_IMG_PATH + ", 1, ?) = ?", args);
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
     }
 
     private static void deleteFiles(ArrayList<File> files) {

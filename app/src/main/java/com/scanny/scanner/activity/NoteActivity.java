@@ -9,6 +9,7 @@ import androidx.core.view.ViewCompat;
 
 import com.scanny.scanner.R;
 import com.scanny.scanner.db.DBHelper;
+import com.scanny.scanner.main_utils.NoteSanitizer;
 import com.scanny.scanner.utils.NavigationUtils;
 
 import jp.wasabeef.richeditor.RichEditor;
@@ -45,7 +46,8 @@ public class NoteActivity extends BaseActivity {
         text = getIntent().getStringExtra("note");
         richEditor.setEditorFontSize(18);
         richEditor.setPadding(10, 10, 10, 10);
-        richEditor.setHtml(text);
+        // Note HTML is rendered in a JavaScript-enabled WebView, so it is sanitized first.
+        richEditor.setHtml(NoteSanitizer.clean(text));
         richEditor.requestFocus();
 
     }
@@ -62,7 +64,7 @@ public class NoteActivity extends BaseActivity {
             public void onClick(View view) {
                 Toast.makeText(NoteActivity.this, "Note Saved", Toast.LENGTH_SHORT).show();
                 BaseActivity.hideKeyboard(NoteActivity.this);
-                dbHelper.updateGroupListDocNote(group_name, current_doc_name, richEditor.getHtml());
+                dbHelper.updateGroupListDocNote(group_name, current_doc_name, NoteSanitizer.clean(richEditor.getHtml()));
                 finish();
             }
         });

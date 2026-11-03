@@ -10,7 +10,6 @@ import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.text.InputType;
 import android.util.Log;
 import android.view.Display;
@@ -30,10 +29,10 @@ import androidx.core.content.FileProvider;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.scanny.scanner.R;
+import com.scanny.scanner.main_utils.AppStorage;
 import com.scanny.scanner.qrcode_generate.Contents;
 import com.scanny.scanner.qrcode_generate.Intents;
 import com.scanny.scanner.qrcode_generate.QRCodeEncoder;
-
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -182,12 +181,16 @@ public class QRGenerateActivity extends BaseActivity implements View.OnClickList
         }
     }
 
+    /**
+     * The QR image is only written so it can be shared, so it goes to the private cache. It used
+     * to be written to the public Download/Scanny/QRCode folder.
+     */
     private File makeDir() {
-        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + File.separator + getResources().getString(R.string.app_name) + "/QRCode/");
-        if (!file.exists() && !file.mkdirs()) {
+        File file = AppStorage.shareDir(this);
+        if (!file.isDirectory()) {
             return null;
         }
-        File file2 = new File(file.getPath() + File.separator + "temp.jpg");
+        File file2 = new File(file, "qrcode.png");
         qrPath = file2;
         return file2;
     }

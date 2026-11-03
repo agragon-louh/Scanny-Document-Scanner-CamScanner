@@ -96,6 +96,8 @@ dependencies {
     implementation 'com.edmodo:cropper:1.0.1'
     implementation 'com.burhanrashid52:photoeditor:1.1.1'
     implementation 'jp.wasabeef:richeditor-android:2.0.0'
+    // Sanitizes note HTML before it reaches the RichEditor WebView (NoteSanitizer).
+    implementation 'org.jsoup:jsoup:1.18.3'
 
     // JitPack-only artifacts (repository is restricted to these groups in settings.gradle)
     implementation 'com.github.pqpo:SmartCropper:v2.1.3'

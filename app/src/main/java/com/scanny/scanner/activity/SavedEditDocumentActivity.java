@@ -14,7 +14,6 @@ import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Environment;
 import android.text.method.HideReturnsTransformationMethod;
 import android.text.method.PasswordTransformationMethod;
 import android.util.Log;
@@ -38,6 +37,7 @@ import com.scanny.scanner.adapter.BookViewPagerAdapter;
 import com.scanny.scanner.adapter.SavedToolsAdapter;
 import com.scanny.scanner.db.DBHelper;
 import com.scanny.scanner.document_view.ViewPagerFixed;
+import com.scanny.scanner.main_utils.AppStorage;
 import com.scanny.scanner.main_utils.BitmapUtils;
 import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.BookModel;
@@ -307,7 +307,7 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
                                             Log.e(SavedEditDocumentActivity.TAG, "onPageSelected: " + current_doc_name);
                                             if (isNewGroup) {
                                                 byte[] bytes = BitmapUtils.getBytes(Constant.original);
-                                                File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+                                                File file = BitmapUtils.writeImageFile(AppStorage.documentsDir(SavedEditDocumentActivity.this), bytes);
                                                 if (file == null) {
                                                     return;
                                                 }
@@ -677,7 +677,7 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
             System.gc();
             Constant.original = createBitmap;
             byte[] bytes = BitmapUtils.getBytes(Constant.original);
-            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            File file = BitmapUtils.writeImageFile(AppStorage.documentsDir(SavedEditDocumentActivity.this), bytes);
             if (file == null) {
                 saveFailed = true;
                 return null;
@@ -753,7 +753,7 @@ public class SavedEditDocumentActivity extends BaseActivity implements View.OnCl
                 return null;
             }
             byte[] bytes = BitmapUtils.getBytes(Constant.original);
-            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            File file = BitmapUtils.writeImageFile(AppStorage.documentsDir(SavedEditDocumentActivity.this), bytes);
             if (file == null) {
                 saveFailed = true;
                 return null;

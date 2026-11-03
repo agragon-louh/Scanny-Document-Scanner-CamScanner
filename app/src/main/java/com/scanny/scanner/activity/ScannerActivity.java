@@ -21,7 +21,6 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.util.Log;
 import android.view.View;
@@ -52,6 +51,7 @@ import com.otaliastudios.cameraview.controls.Flash;
 import com.scanlibrary.ScanActivity;
 import com.scanny.scanner.R;
 import com.scanny.scanner.db.DBHelper;
+import com.scanny.scanner.main_utils.AppStorage;
 import com.scanny.scanner.main_utils.BitmapUtils;
 import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.BookModel;
@@ -354,14 +354,14 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                     Log.e(TAG, "onPictureTaken " + data.length);
                     Toast.makeText(ScannerActivity.this, "Picture Taken", Toast.LENGTH_SHORT).show();
                     if (Constant.current_camera_view.equals("Document") || (Constant.current_camera_view.equals("ID Card") && Constant.card_type.equals("Single"))) {
-                        File externalFilesDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-                        File file = new File(externalFilesDir, System.currentTimeMillis() + ".jpg");
+                        File file = new File(AppStorage.captureDir(ScannerActivity.this), System.currentTimeMillis() + ".jpg");
                         try {
                             FileOutputStream fileOutputStream = new FileOutputStream(file);
                             fileOutputStream.write(data);
                             fileOutputStream.close();
                             Bitmap scalePreserveRatio = decodeHalfSize(data);
                             int cameraPhotoOrientation = getCameraPhotoOrientation(file.getPath());
+                            file.delete();
                             Matrix matrix = new Matrix();
                             matrix.postRotate((float) cameraPhotoOrientation);
                             Constant.original = Bitmap.createBitmap(scalePreserveRatio, 0, 0, scalePreserveRatio.getWidth(), scalePreserveRatio.getHeight(), matrix, true);
@@ -373,14 +373,14 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                         }
                     } else if (!Constant.current_camera_view.equals("ID Card") || !Constant.card_type.equals("Double")) {
                         if (Constant.current_camera_view.equals("Book")) {
-                            File externalFilesDir2 = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-                            File file2 = new File(externalFilesDir2, System.currentTimeMillis() + ".jpg");
+                            File file2 = new File(AppStorage.captureDir(ScannerActivity.this), System.currentTimeMillis() + ".jpg");
                             try {
                                 FileOutputStream fileOutputStream2 = new FileOutputStream(file2);
                                 fileOutputStream2.write(data);
                                 fileOutputStream2.close();
                                 Bitmap scalePreserveRatio2 = decodeHalfSize(data);
                                 int cameraPhotoOrientation2 = getCameraPhotoOrientation(file2.getPath());
+                                file2.delete();
                                 Matrix matrix2 = new Matrix();
                                 matrix2.postRotate((float) cameraPhotoOrientation2);
                                 Constant.bookBitmap = Bitmap.createBitmap(scalePreserveRatio2, 0, 0, scalePreserveRatio2.getWidth(), scalePreserveRatio2.getHeight(), matrix2, true);
@@ -393,14 +393,14 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                                 Log.w(TAG, "Cannot write to " + file2, e2);
                             }
                         } else if (Constant.current_camera_view.equals("Photo")) {
-                            File externalFilesDir3 = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-                            File file3 = new File(externalFilesDir3, System.currentTimeMillis() + ".jpg");
+                            File file3 = new File(AppStorage.captureDir(ScannerActivity.this), System.currentTimeMillis() + ".jpg");
                             try {
                                 FileOutputStream fileOutputStream3 = new FileOutputStream(file3);
                                 fileOutputStream3.write(data);
                                 fileOutputStream3.close();
                                 Bitmap scalePreserveRatio3 = decodeHalfSize(data);
                                 int cameraPhotoOrientation3 = getCameraPhotoOrientation(file3.getPath());
+                                file3.delete();
                                 Matrix matrix3 = new Matrix();
                                 matrix3.postRotate((float) cameraPhotoOrientation3);
                                 sourceUri = BitmapUtils.getUri(getApplicationContext(), Bitmap.createBitmap(scalePreserveRatio3, 0, 0, scalePreserveRatio3.getWidth(), scalePreserveRatio3.getHeight(), matrix3, true));
@@ -413,14 +413,14 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                             }
                         }
                     } else if (!isBackSide) {
-                        File externalFilesDir4 = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-                        File file4 = new File(externalFilesDir4, System.currentTimeMillis() + ".jpg");
+                        File file4 = new File(AppStorage.captureDir(ScannerActivity.this), System.currentTimeMillis() + ".jpg");
                         try {
                             FileOutputStream fileOutputStream4 = new FileOutputStream(file4);
                             fileOutputStream4.write(data);
                             fileOutputStream4.close();
                             Bitmap scalePreserveRatio4 = decodeHalfSize(data);
                             int cameraPhotoOrientation4 = getCameraPhotoOrientation(file4.getPath());
+                            file4.delete();
                             Matrix matrix4 = new Matrix();
                             matrix4.postRotate((float) cameraPhotoOrientation4);
                             Constant.IDCardBitmap = Bitmap.createBitmap(scalePreserveRatio4, 0, 0, scalePreserveRatio4.getWidth(), scalePreserveRatio4.getHeight(), matrix4, true);
@@ -436,14 +436,14 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                             Log.w(TAG, "Cannot write to " + file4, e4);
                         }
                     } else {
-                        File externalFilesDir5 = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-                        File file5 = new File(externalFilesDir5, System.currentTimeMillis() + ".jpg");
+                        File file5 = new File(AppStorage.captureDir(ScannerActivity.this), System.currentTimeMillis() + ".jpg");
                         try {
                             FileOutputStream fileOutputStream5 = new FileOutputStream(file5);
                             fileOutputStream5.write(data);
                             fileOutputStream5.close();
                             Bitmap scalePreserveRatio5 = decodeHalfSize(data);
                             int cameraPhotoOrientation5 = getCameraPhotoOrientation(file5.getPath());
+                            file5.delete();
                             Matrix matrix5 = new Matrix();
                             matrix5.postRotate((float) cameraPhotoOrientation5);
                             Constant.IDCardBitmap = Bitmap.createBitmap(scalePreserveRatio5, 0, 0, scalePreserveRatio5.getWidth(), scalePreserveRatio5.getHeight(), matrix5, true);
@@ -1162,7 +1162,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
                 return null;
             }
             byte[] bytes = BitmapUtils.getBytes(bitmap);
-            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            File file = BitmapUtils.writeImageFile(AppStorage.documentsDir(ScannerActivity.this), bytes);
             if (file == null) {
                 saveFailed = true;
                 return null;
@@ -1220,7 +1220,7 @@ public class ScannerActivity extends BaseActivity implements ActivityCompat.OnRe
             for (int i = 0; i < bitmapList.size(); i++) {
                 if (bitmapList.get(i) != null) {
                     byte[] bytes = BitmapUtils.getBytes(bitmapList.get(i));
-                    File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+                    File file = BitmapUtils.writeImageFile(AppStorage.documentsDir(ScannerActivity.this), bytes);
                     if (file == null) {
                         saveFailed = true;
                         continue;

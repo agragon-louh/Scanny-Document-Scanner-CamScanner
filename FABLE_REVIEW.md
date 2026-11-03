@@ -31,8 +31,8 @@ This is a blind review: I had no prior context about the app. It covers:
 | S11 | Low | Unneeded permissions: `BILLING`, `RECEIVE_BOOT_COMPLETED`, `WAKE_LOCK`, `ACCESS_WIFI_STATE`, and storage permissions with no `maxSdkVersion`. | **Fixed**: removed, or scoped with `maxSdkVersion`. |
 | S12 | Low | The privacy-policy WebView did not disable file and content access. | **Fixed**: explicitly disabled, and JavaScript is off. |
 | S13 | Low | The QR "search" button hard-coded the Google app's class name and crashed when that app was missing. | **Fixed**: uses a generic `ACTION_WEB_SEARCH` and catches `ActivityNotFoundException`. |
-| S14 | Low | **Self-XSS in notes.** `NoteActivity` passes stored note HTML to a JavaScript-enabled WebView (`RichEditor.setHtml`). Only the user's own input reaches it today. | **Open**: see 4.6. |
-| S15 | Medium | **Data at rest is unencrypted.** Scans live in app-specific *external* storage (`Android/data/<pkg>/files`). Shared PDFs and images are written in plaintext to public `Download/Scanny/`, including the un-protected copy made when sharing a PDF. | **Open**: needs a design decision (see 4.6). |
+| S14 | Low | **Self-XSS in notes.** `NoteActivity` passes stored note HTML to a JavaScript-enabled WebView (`RichEditor.setHtml`). Only the user's own input reaches it today. | **Fixed**: `main_utils/NoteSanitizer` (jsoup) keeps only the editor's own markup, on load and on save. |
+| S15 | Medium | **Data at rest is unencrypted.** Scans live in app-specific *external* storage (`Android/data/<pkg>/files`). Shared PDFs and images are written in plaintext to public `Download/Scanny/`, including the un-protected copy made when sharing a PDF. | **Fixed**: scans and signatures now live in internal storage (`main_utils/AppStorage`). Existing files and database paths are migrated on the splash screen. Camera captures and the QR share image go to the cache, and stale cache files are removed after 24 h. User-chosen exports to `Download/Scanny` are unchanged. |
 | S16 | Info | AdMob IDs in `strings.xml` are **Google test IDs**, and the OneSignal app ID is a placeholder. OneSignal init is now skipped while the ID contains `#`. | **Open**: replace before release. |
 
 ---
@@ -149,7 +149,7 @@ lottie 6.6.7, cameraview 2.7.2, ucrop 2.2.6→2.2.10.
 - [ ] Bump `versionCode` and `versionName` (set to 2 / 1.1).
 
 ### 4.6 Security items that need a decision
-- [ ] **Data at rest (S15):** move working files from `getExternalFilesDir()` to `getFilesDir()` (internal storage), optionally encrypted. Write share-only PDFs to `getCacheDir()` (the FileProvider already exposes `cache-path`) instead of public Downloads, and delete them after sharing.
-- [ ] **Notes WebView (S14):** sanitize HTML before `setHtml()` (for example with a jsoup Safelist), or store notes as plain text.
+- [x] **Data at rest (S15):** move working files from `getExternalFilesDir()` to `getFilesDir()` (internal storage), optionally encrypted. Write share-only PDFs to `getCacheDir()` (the FileProvider already exposes `cache-path`) instead of public Downloads, and delete them after sharing.
+- [x] **Notes WebView (S14):** sanitize HTML before `setHtml()` (for example with a jsoup Safelist), or store notes as plain text.
 - [ ] **Screen capture:** scanned IDs and signatures are sensitive. Consider `FLAG_SECURE` on the editor, preview and ID-card screens. On API 37, `setContentCaptureEnabled(false)` no longer works.
 - [ ] `Scanny.docx` in the repo root was not reviewed. It is a binary file, so check it for anything that should not be public.

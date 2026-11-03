@@ -19,7 +19,6 @@ import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.text.Layout;
 import android.util.Log;
 import android.view.View;
@@ -62,6 +61,7 @@ import com.scanny.scanner.adapter.SignatureAdapter;
 import com.scanny.scanner.adapter.WatermarkFontAdapter;
 import com.scanny.scanner.db.DBHelper;
 import com.scanny.scanner.document_view.ColorFilter;
+import com.scanny.scanner.main_utils.AppStorage;
 import com.scanny.scanner.main_utils.AdjustUtil;
 import com.scanny.scanner.main_utils.BitmapUtils;
 import com.scanny.scanner.main_utils.Constant;
@@ -1444,7 +1444,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
     }
 
     private void setSignatureList() {
-        File[] listFiles = new File(getExternalFilesDir((String) null).getAbsolutePath() + "/Signature").listFiles();
+        File[] listFiles = AppStorage.signatureDir(DocumentEditorActivity.this).listFiles();
         if (listFiles != null) {
             for (int length = listFiles.length - 1; length >= 0; length--) {
                 String file = listFiles[length].toString();
@@ -1593,7 +1593,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
 
                 if (bitmap != null) {
                     byte[] bytes = BitmapUtils.getBytes(bitmap);
-                    File file = new File(getExternalFilesDir((String) null).getAbsolutePath(), "/Signature");
+                    File file = AppStorage.signatureDir(DocumentEditorActivity.this);
                     if (!file.exists() && !file.mkdirs()) {
                         return null;
                     }
@@ -1654,7 +1654,7 @@ public class DocumentEditorActivity extends BaseActivity implements View.OnClick
                 return null;
             }
             byte[] bytes = BitmapUtils.getBytes(Constant.original);
-            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            File file = BitmapUtils.writeImageFile(AppStorage.documentsDir(DocumentEditorActivity.this), bytes);
             if (file == null) {
                 saveFailed = true;
                 return null;

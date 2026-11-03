@@ -9,7 +9,6 @@ import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Environment;
 import android.view.View;
 import android.widget.Toast;
 import android.widget.ImageView;
@@ -19,6 +18,7 @@ import com.github.chrisbanes.photoview.PhotoView;
 import com.scanlibrary.ScanActivity;
 import com.scanny.scanner.R;
 import com.scanny.scanner.db.DBHelper;
+import com.scanny.scanner.main_utils.AppStorage;
 import com.scanny.scanner.main_utils.BitmapUtils;
 import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.DBModel;
@@ -324,7 +324,7 @@ public class CurrentFilterActivity extends BaseActivity implements View.OnClickL
                 return null;
             }
             byte[] bytes = BitmapUtils.getBytes(bitmap);
-            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            File file = BitmapUtils.writeImageFile(AppStorage.documentsDir(CurrentFilterActivity.this), bytes);
             if (file == null) {
                 saveFailed = true;
                 return null;

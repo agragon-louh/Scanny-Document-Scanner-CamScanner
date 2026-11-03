@@ -10,7 +10,6 @@ import android.graphics.Bitmap;
 import android.graphics.Matrix;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Environment;
 import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
@@ -22,6 +21,7 @@ import android.widget.TextView;
 import com.scanlibrary.ScanActivity;
 import com.scanny.scanner.R;
 import com.scanny.scanner.db.DBHelper;
+import com.scanny.scanner.main_utils.AppStorage;
 import com.scanny.scanner.main_utils.AdjustUtil;
 import com.scanny.scanner.main_utils.BitmapUtils;
 import com.scanny.scanner.main_utils.Constant;
@@ -424,7 +424,7 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
                 return null;
             }
             byte[] bytes = BitmapUtils.getBytes(bitmap);
-            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            File file = BitmapUtils.writeImageFile(AppStorage.documentsDir(CropDocumentActivity.this), bytes);
             if (file == null) {
                 saveFailed = true;
                 return null;
@@ -486,7 +486,7 @@ public class CropDocumentActivity extends BaseActivity implements View.OnClickLi
                 return null;
             }
             byte[] bytes = BitmapUtils.getBytes(bitmap);
-            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            File file = BitmapUtils.writeImageFile(AppStorage.documentsDir(CropDocumentActivity.this), bytes);
             if (file == null) {
                 saveFailed = true;
                 return null;

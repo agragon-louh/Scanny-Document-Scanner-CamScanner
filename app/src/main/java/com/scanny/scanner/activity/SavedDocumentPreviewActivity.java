@@ -16,7 +16,6 @@ import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Environment;
 import android.text.method.HideReturnsTransformationMethod;
 import android.text.method.PasswordTransformationMethod;
 import android.util.Log;
@@ -40,6 +39,7 @@ import com.scanny.scanner.adapter.PreviewPagerAdapter;
 import com.scanny.scanner.adapter.SavedToolsAdapter;
 import com.scanny.scanner.db.DBHelper;
 import com.scanny.scanner.document_view.ViewPagerFixed;
+import com.scanny.scanner.main_utils.AppStorage;
 import com.scanny.scanner.main_utils.BitmapUtils;
 import com.scanny.scanner.main_utils.Constant;
 import com.scanny.scanner.models.DBModel;
@@ -633,7 +633,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
             System.gc();
             Constant.original = createBitmap;
             byte[] bytes = BitmapUtils.getBytes(Constant.original);
-            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            File file = BitmapUtils.writeImageFile(AppStorage.documentsDir(SavedDocumentPreviewActivity.this), bytes);
             if (file == null) {
                 saveFailed = true;
                 return null;
@@ -741,7 +741,7 @@ public class SavedDocumentPreviewActivity extends BaseActivity implements View.O
                 return null;
             }
             byte[] bytes = BitmapUtils.getBytes(Constant.original);
-            File file = BitmapUtils.writeImageFile(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), bytes);
+            File file = BitmapUtils.writeImageFile(AppStorage.documentsDir(SavedDocumentPreviewActivity.this), bytes);
             if (file == null) {
                 saveFailed = true;
                 return null;

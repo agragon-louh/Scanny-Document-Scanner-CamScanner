@@ -50,3 +50,6 @@
 # OpenCV JNI bridge in :scanlibrary (native code looks these up by name).
 -keep class com.scanlibrary.** { *; }
 -keep class org.opencv.** { *; }
+
+# jsoup references the optional re2j regex engine, which is not bundled.
+-dontwarn com.google.re2j.**

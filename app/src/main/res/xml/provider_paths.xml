@@ -4,11 +4,18 @@
     (external-path ".") let any granted URI address the whole shared storage.
 -->
 <paths>
-    <!-- App-specific storage: Android/data/<pkg>/files/... (scans, documents, signatures) -->
+    <!-- Internal storage: page images and signatures (see AppStorage) -->
+    <files-path
+        name="documents"
+        path="Documents/" />
+    <files-path
+        name="signatures"
+        path="Signature/" />
+    <!-- Old location (Android/data/<pkg>/files), for pages whose migration has not finished -->
     <external-files-path
         name="app_files"
         path="." />
-    <!-- Exported PDFs / images / QR codes: Download/Scanny/... -->
+    <!-- Exported PDFs / images: Download/Scanny/... -->
     <external-path
         name="scanny_exports"
         path="Download/Scanny/" />
@@ -16,6 +23,7 @@
     <external-path
         name="scan_sample"
         path="Download/scanSample/" />
+    <!-- Share-only files: PDFs, images, QR codes -->
     <cache-path
         name="cache"
         path="." />
